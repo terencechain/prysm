@@ -21,6 +21,7 @@ type SignedBeaconBlock interface {
 	PbPhase0Block() (*ethpb.SignedBeaconBlock, error)
 	PbAltairBlock() (*ethpb.SignedBeaconBlockAltair, error)
 	PbBellatrixBlock() (*ethpb.SignedBeaconBlockBellatrix, error)
+	PbEip4844Block() (*ethpb.SignedBeaconBlockWithBlobKZGs, error)
 	ssz.Marshaler
 	ssz.Unmarshaler
 	Version() int

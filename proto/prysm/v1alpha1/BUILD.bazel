@@ -112,6 +112,7 @@ ssz_gen_marshal(
         "Blob",
         "BlobsSidecar",
         "SignedBlobsSidecar",
+        "BlobsSidecarsByRangeRequest",
     ],
 )
 

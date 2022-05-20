@@ -47,6 +47,7 @@ const seenUnaggregatedAttSize = 20000
 const seenAggregatedAttSize = 1024
 const seenSyncMsgSize = 1000         // Maximum of 512 sync committee members, 1000 is a safe amount.
 const seenSyncContributionSize = 512 // Maximum of SYNC_COMMITTEE_SIZE as specified by the spec.
+const seenBlobsSidecarSize = 1000
 const seenExitSize = 100
 const seenProposerSlashingSize = 100
 const badBlockSize = 1000
@@ -128,6 +129,8 @@ type Service struct {
 	seenSyncMessageCache             *lru.Cache
 	seenSyncContributionLock         sync.RWMutex
 	seenSyncContributionCache        *lru.Cache
+	seenBlobsSidecarLock             sync.RWMutex
+	seenBlobsSidecarCache            *lru.Cache
 	badBlockCache                    *lru.Cache
 	badBlockLock                     sync.RWMutex
 	signatureChan                    chan *signatureVerifier
@@ -220,6 +223,7 @@ func (s *Service) initCaches() {
 	s.seenUnAggregatedAttestationCache = lruwrpr.New(seenUnaggregatedAttSize)
 	s.seenSyncMessageCache = lruwrpr.New(seenSyncMsgSize)
 	s.seenSyncContributionCache = lruwrpr.New(seenSyncContributionSize)
+	s.seenBlobsSidecarCache = lruwrpr.New(seenBlobsSidecarSize)
 	s.seenExitCache = lruwrpr.New(seenExitSize)
 	s.seenAttesterSlashingCache = make(map[uint64]bool)
 	s.seenProposerSlashingCache = lruwrpr.New(seenProposerSlashingSize)

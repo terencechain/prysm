@@ -105,6 +105,11 @@ func (Phase0SignedBeaconBlock) PbBellatrixBlock() (*eth.SignedBeaconBlockBellatr
 	return nil, ErrUnsupportedBellatrixBlock
 }
 
+// PbEip4844Block is a stub.
+func (Phase0SignedBeaconBlock) PbEip4844Block() (*eth.SignedBeaconBlockWithBlobKZGs, error) {
+	return nil, ErrUnsupportedPhase0Block
+}
+
 // Version of the underlying protobuf object.
 func (Phase0SignedBeaconBlock) Version() int {
 	return version.Phase0

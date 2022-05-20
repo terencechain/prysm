@@ -94,6 +94,11 @@ func (w bellatrixSignedBeaconBlock) PbBellatrixBlock() (*eth.SignedBeaconBlockBe
 	return w.b, nil
 }
 
+// PbEip4844Block is a stub.
+func (bellatrixSignedBeaconBlock) PbEip4844Block() (*eth.SignedBeaconBlockWithBlobKZGs, error) {
+	return nil, ErrUnsupportedPhase0Block
+}
+
 // PbPhase0Block is a stub.
 func (bellatrixSignedBeaconBlock) PbPhase0Block() (*eth.SignedBeaconBlock, error) {
 	return nil, ErrUnsupportedPhase0Block

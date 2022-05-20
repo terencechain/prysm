@@ -1127,6 +1127,8 @@ github.com/prometheus/tsdb v0.10.0 h1:If5rVCMTp6W2SiRAQFlbpJNgVlgMEd+U2GZckwK38i
 github.com/prometheus/tsdb v0.10.0/go.mod h1:oi49uRhEe9dPUTlS3JRZOwJuVi6tmh10QSgwXEyGCt4=
 github.com/protolambda/go-ethereum v1.7.4-0.20220312001233-587a2127f54f h1:b0Xa1rVYlNdfzMNBgrLAOs414hjlMACjYwBYuuafy4Q=
 github.com/protolambda/go-ethereum v1.7.4-0.20220312001233-587a2127f54f/go.mod h1:w4QC9ZtaeGtHhwjPZdQ0OWQRisrXvwDiCJiehoN548s=
+github.com/protolambda/go-ethereum v1.7.4-0.20220322192006-d6fb21061346 h1:5SvREhUZA77hlHapt7/JlyI+SYllAIbi3OywlbCdP+Q=
+github.com/protolambda/go-ethereum v1.7.4-0.20220322192006-d6fb21061346/go.mod h1:w4QC9ZtaeGtHhwjPZdQ0OWQRisrXvwDiCJiehoN548s=
 github.com/protolambda/go-kzg v0.0.0-20220220065500-36404333406f h1:lkbqhxyUcDtzxqylImpylMUCkigRLQ4791yn6OLy2/g=
 github.com/protolambda/go-kzg v0.0.0-20220220065500-36404333406f/go.mod h1:P9wXBp1WMjLHx2C22Gg7FyqQcJktMAohrKj3tdaWIH0=
 github.com/protolambda/ztyp v0.2.1 h1:+rfw75/Zh8EopNlG652TGDXlLgJflj6XWxJ9yCVpJws=
