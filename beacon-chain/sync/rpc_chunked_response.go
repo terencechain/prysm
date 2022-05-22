@@ -11,6 +11,7 @@ import (
 	"github.com/prysmaticlabs/prysm/config/params"
 	"github.com/prysmaticlabs/prysm/encoding/bytesutil"
 	"github.com/prysmaticlabs/prysm/network/forks"
+	ethpb "github.com/prysmaticlabs/prysm/proto/prysm/v1alpha1"
 	"github.com/prysmaticlabs/prysm/proto/prysm/v1alpha1/block"
 	"github.com/prysmaticlabs/prysm/runtime/version"
 )
@@ -77,6 +78,25 @@ func ReadChunkedBlock(stream libp2pcore.Stream, chain blockchain.ChainInfoFetche
 	}
 
 	return readResponseChunk(stream, chain, p2p)
+}
+
+// WriteBlobsChunk writes blobs chunk object to stream.
+// response_chunk  ::= <result> | <context-bytes> | <encoding-dependent-header> | <encoded-payload>
+func WriteBlobsSidecarChunk(stream libp2pcore.Stream, chain blockchain.ChainInfoFetcher, encoding encoder.NetworkEncoding, blobs *ethpb.BlobsSidecar) error {
+	if _, err := stream.Write([]byte{responseCodeSuccess}); err != nil {
+		return err
+	}
+	valRoot := chain.GenesisValidatorsRoot()
+	ctxBytes, err := forks.ForkDigestFromEpoch(params.BeaconConfig().Eip4844ForkEpoch, valRoot[:])
+	if err != nil {
+		return err
+	}
+
+	if err := writeContextToStream(ctxBytes[:], stream, chain); err != nil {
+		return err
+	}
+	_, err = encoding.EncodeWithMaxLength(stream, blobs)
+	return err
 }
 
 // readFirstChunkedBlock reads the first chunked block and applies the appropriate deadlines to

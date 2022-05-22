@@ -5,7 +5,6 @@ import (
 
 	"github.com/pkg/errors"
 	types "github.com/prysmaticlabs/eth2-types"
-	"github.com/prysmaticlabs/prysm/beacon-chain/db/filters"
 	"github.com/prysmaticlabs/prysm/encoding/bytesutil"
 	ethpb "github.com/prysmaticlabs/prysm/proto/prysm/v1alpha1"
 	bolt "go.etcd.io/bbolt"
@@ -47,17 +46,13 @@ func (s *Store) BlobsSidecar(ctx context.Context, blockRoot [32]byte) (*ethpb.Bl
 	return blob, nil
 }
 
-func (s *Store) BlobsBySlot(ctx context.Context, slot types.Slot) (bool, *ethpb.BlobsSidecar, error) {
+func (s *Store) BlobsSidecarsBySlot(ctx context.Context, slot types.Slot) (bool, []*ethpb.BlobsSidecar, error) {
 	ctx, span := trace.StartSpan(ctx, "BeaconDB.BlobsBySlot")
 	defer span.End()
 
-	filter := filters.NewFilter().SetStartSlot(slot).SetEndSlot(slot)
-
+	var blobsSidecars []*ethpb.BlobsSidecar
 	err := s.db.View(func(tx *bolt.Tx) error {
-		keys, err := blockRootsByFilter(ctx, tx, filter)
-		if err != nil {
-			return err
-		}
+		keys := blockRootsBySlot(ctx, tx, slot)
 		blockRoots := make([][32]byte, 0, len(keys))
 		for i := 0; i < len(keys); i++ {
 			blockRoots[i] = bytesutil.ToBytes32(keys[i])
@@ -68,18 +63,18 @@ func (s *Store) BlobsBySlot(ctx context.Context, slot types.Slot) (bool, *ethpb.
 			if len(enc) == 0 {
 				return nil
 			}
-			blob := &ethpb.BlobsSidecar{}
-			if err := decode(ctx, enc, blob); err != nil {
+			blobs := &ethpb.BlobsSidecar{}
+			if err := decode(ctx, enc, blobs); err != nil {
 				return err
 			}
+			blobsSidecars = append(blobsSidecars, blobs)
 		}
 
 		return nil
 	})
-
 	if err != nil {
 		return false, nil, errors.Wrap(err, "could not retrieve blobs")
 	}
 
-	return false, nil, nil
+	return true, blobsSidecars, nil
 }

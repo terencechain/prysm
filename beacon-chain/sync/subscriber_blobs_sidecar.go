@@ -9,9 +9,7 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
-// skipcq: SCC-U1000
 func (s *Service) blobsSidecarSubscriber(ctx context.Context, msg proto.Message) error {
-	// TODO(EIP-4844)
 	m, ok := msg.(*ethpb.SignedBlobsSidecar)
 	if !ok {
 		return fmt.Errorf("message was not type *eth.SignedBlobsSidecar, type=%T", msg)

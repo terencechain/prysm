@@ -142,7 +142,7 @@ func validateBlobFr(blobs []*ethpb.Blob) error {
 	for _, blob := range blobs {
 		for _, b := range blob.Blob {
 			if len(b) != 32 {
-				return errors.New("blob field element is too short")
+				return errors.New("invalid blob field element size")
 			}
 			data := (*[32]byte)(b)
 			if !kbls.ValidFr(*data) {

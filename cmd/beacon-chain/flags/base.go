@@ -160,6 +160,18 @@ var (
 		Usage: "The factor by which block batch limit may increase on burst.",
 		Value: 10,
 	}
+	// BlobsTransferRate specifies the bytes/sec transfer rate of requested blobs.
+	BlobsTransferRate = &cli.IntFlag{
+		Name:  "blobs-transfer-rate",
+		Usage: "The bytes/sec transfer rate of requested blobs.",
+		Value: 1 << 20, // 1 MiB
+	}
+	// BlobsTransferRateThresh specifies the maximum bytes per second that can be transferred.
+	BlobsTransferRateThresh = &cli.IntFlag{
+		Name:  "blobs-transfer-rate-thresh",
+		Usage: "The maximum bytes per second that can be transferred.",
+		Value: 1 << 23, // 8 MiB
+	}
 	// DisableSync disables a node from syncing at start-up. Instead the node enters regular sync
 	// immediately.
 	DisableSync = &cli.BoolFlag{
