@@ -12,6 +12,7 @@ import (
 	"github.com/prysmaticlabs/prysm/encoding/bytesutil"
 	"github.com/prysmaticlabs/prysm/network/forks"
 	ethpb "github.com/prysmaticlabs/prysm/proto/prysm/v1alpha1"
+	pb "github.com/prysmaticlabs/prysm/proto/prysm/v1alpha1"
 	"github.com/prysmaticlabs/prysm/proto/prysm/v1alpha1/block"
 	"github.com/prysmaticlabs/prysm/runtime/version"
 )
@@ -97,6 +98,46 @@ func WriteBlobsSidecarChunk(stream libp2pcore.Stream, chain blockchain.ChainInfo
 	}
 	_, err = encoding.EncodeWithMaxLength(stream, blobs)
 	return err
+}
+
+func ReadChunkedBlobsSidecar(stream libp2pcore.Stream, chain blockchain.ChainInfoFetcher, p2p p2p.P2P, isFirstChunk bool) (*pb.BlobsSidecar, error) {
+	var (
+		code   uint8
+		errMsg string
+		err    error
+	)
+	if isFirstChunk {
+		code, errMsg, err = ReadStatusCode(stream, p2p.Encoding())
+	} else {
+		SetStreamReadDeadline(stream, respTimeout)
+		code, errMsg, err = readStatusCodeNoDeadline(stream, p2p.Encoding())
+	}
+	if err != nil {
+		return nil, err
+	}
+	if code != 0 {
+		return nil, errors.New(errMsg)
+	}
+	// No-op for now with the rpc context.
+	rpcCtx, err := readContextFromStream(stream, chain)
+	if err != nil {
+		return nil, err
+	}
+	if len(rpcCtx) != forkDigestLength {
+		return nil, errors.Errorf("invalid digest returned, wanted a length of %d but received %d", forkDigestLength, len(rpcCtx))
+	}
+	valRoot := chain.GenesisValidatorsRoot()
+	ctxBytes, err := forks.ForkDigestFromEpoch(params.BeaconConfig().Eip4844ForkEpoch, valRoot[:])
+	if err != nil {
+		return nil, err
+	}
+	if ctxBytes == bytesutil.ToBytes4(rpcCtx) {
+		return nil, errors.New("no valid digest matched")
+	}
+
+	var blobs *pb.BlobsSidecar
+	err = p2p.Encoding().DecodeWithMaxLength(stream, blobs)
+	return blobs, err
 }
 
 // readFirstChunkedBlock reads the first chunked block and applies the appropriate deadlines to

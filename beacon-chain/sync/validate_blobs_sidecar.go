@@ -70,9 +70,7 @@ func (s *Service) validateBlobsSidecar(ctx context.Context, pid peer.ID, msg *pu
 		return pubsub.ValidationReject, err
 	}
 
-	var blockRoot [32]byte
-	copy(blockRoot[:], signed.Message.BeaconBlockRoot)
-	blk, err := s.cfg.beaconDB.Block(ctx, blockRoot)
+	blk, err := s.cfg.beaconDB.Block(ctx, bytesutil.ToBytes32(signed.Message.BeaconBlockRoot))
 	if err != nil {
 		return pubsub.ValidationIgnore, errors.Wrap(err, "Could not retrieve block")
 	}
@@ -144,8 +142,7 @@ func validateBlobFr(blobs []*ethpb.Blob) error {
 			if len(b) != 32 {
 				return errors.New("invalid blob field element size")
 			}
-			data := (*[32]byte)(b)
-			if !kbls.ValidFr(*data) {
+			if !kbls.ValidFr(bytesutil.ToBytes32(b)) {
 				return errors.New("invalid blob field element")
 			}
 		}

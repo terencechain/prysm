@@ -2,15 +2,21 @@ package sync
 
 import (
 	"context"
+	"io"
 	"time"
 
 	libp2pcore "github.com/libp2p/go-libp2p-core"
 	"github.com/libp2p/go-libp2p-core/peer"
 	"github.com/pkg/errors"
+	"github.com/prysmaticlabs/prysm/beacon-chain/blockchain"
+	"github.com/prysmaticlabs/prysm/beacon-chain/core/blob"
+	"github.com/prysmaticlabs/prysm/beacon-chain/p2p"
 	p2ptypes "github.com/prysmaticlabs/prysm/beacon-chain/p2p/types"
 	"github.com/prysmaticlabs/prysm/config/params"
+	"github.com/prysmaticlabs/prysm/encoding/bytesutil"
 	"github.com/prysmaticlabs/prysm/monitoring/tracing"
 	pb "github.com/prysmaticlabs/prysm/proto/prysm/v1alpha1"
+	"github.com/prysmaticlabs/prysm/time/slots"
 	"go.opencensus.io/trace"
 )
 
@@ -76,9 +82,50 @@ func (s *Service) blobsSidecarsByRangeRPCHandler(ctx context.Context, msg interf
 	return nil
 }
 
-func (s *Service) sendBlobsSidecarsByRangeRequest(ctx context.Context, id peer.ID) error {
-	// TODO(EIP-4844)
-	return nil
-}
+func (s *Service) sendBlobsSidecarsByRangeRequest(
+	ctx context.Context, chain blockchain.ChainInfoFetcher, p2pProvider p2p.P2P, pid peer.ID,
+	req *pb.BlobsSidecarsByRangeRequest) ([]*pb.BlobsSidecar, error) {
+	topic, err := p2p.TopicFromMessage(p2p.BeaconBlocksByRangeMessageName, slots.ToEpoch(chain.CurrentSlot()))
+	if err != nil {
+		return nil, err
+	}
+	stream, err := p2pProvider.Send(ctx, req, topic, pid)
+	if err != nil {
+		return nil, err
+	}
+	defer closeStream(stream, log)
 
-func blobSize()
+	var blobsSidecars []*pb.BlobsSidecar
+	for {
+		blobs, err := ReadChunkedBlobsSidecar(stream, chain, p2pProvider, len(blobsSidecars) == 0)
+		if errors.Is(err, io.EOF) {
+			break
+		}
+		if err != nil {
+			return nil, err
+		}
+
+		signed, err := s.cfg.beaconDB.Block(ctx, bytesutil.ToBytes32(blobs.BeaconBlockRoot))
+		if err != nil {
+			return nil, err
+		}
+		blk, err := signed.PbEip4844Block()
+		if err != nil {
+			return nil, err
+		}
+		blockKzgs := blk.Block.Body.BlobKzgs
+		expectedKzgs := make([][48]byte, len(blockKzgs))
+		for i := range blockKzgs {
+			expectedKzgs[i] = bytesutil.ToBytes48(blockKzgs[i])
+		}
+		if err := blob.VerifyBlobsSidecar(blobs.BeaconBlockSlot, bytesutil.ToBytes32(blobs.BeaconBlockRoot), expectedKzgs, blobs); err != nil {
+			return nil, errors.Wrap(err, "invalid blobs sidecar")
+		}
+
+		blobsSidecars = append(blobsSidecars, blobs)
+		if len(blobsSidecars) >= int(params.BeaconNetworkConfig().MaxRequestBlobsSidecars) {
+			return nil, ErrInvalidFetchedData
+		}
+	}
+	return blobsSidecars, nil
+}
