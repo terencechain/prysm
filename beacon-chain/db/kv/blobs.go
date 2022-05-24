@@ -47,7 +47,7 @@ func (s *Store) BlobsSidecar(ctx context.Context, blockRoot [32]byte) (*ethpb.Bl
 }
 
 func (s *Store) BlobsSidecarsBySlot(ctx context.Context, slot types.Slot) (bool, []*ethpb.BlobsSidecar, error) {
-	ctx, span := trace.StartSpan(ctx, "BeaconDB.BlobsBySlot")
+	ctx, span := trace.StartSpan(ctx, "BeaconDB.BlobsSidecarsBySlot")
 	defer span.End()
 
 	var blobsSidecars []*ethpb.BlobsSidecar

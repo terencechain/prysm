@@ -17,11 +17,14 @@ import (
 	dbcommands "github.com/prysmaticlabs/prysm/cmd/beacon-chain/db"
 	"github.com/prysmaticlabs/prysm/cmd/beacon-chain/flags"
 	powchaincmd "github.com/prysmaticlabs/prysm/cmd/beacon-chain/powchain"
+	"github.com/prysmaticlabs/prysm/cmd/beacon-chain/sync/checkpoint"
+	"github.com/prysmaticlabs/prysm/cmd/beacon-chain/sync/genesis"
 	"github.com/prysmaticlabs/prysm/config/features"
 	"github.com/prysmaticlabs/prysm/io/file"
 	"github.com/prysmaticlabs/prysm/io/logs"
 	"github.com/prysmaticlabs/prysm/monitoring/journald"
 	"github.com/prysmaticlabs/prysm/runtime/debug"
+	"github.com/prysmaticlabs/prysm/runtime/fdlimits"
 	_ "github.com/prysmaticlabs/prysm/runtime/maxprocs"
 	"github.com/prysmaticlabs/prysm/runtime/tos"
 	"github.com/prysmaticlabs/prysm/runtime/version"
@@ -33,7 +36,6 @@ import (
 var appFlags = []cli.Flag{
 	flags.DepositContractFlag,
 	flags.HTTPWeb3ProviderFlag,
-	flags.ExecutionProviderFlag,
 	flags.ExecutionJWTSecretFlag,
 	flags.FallbackWeb3ProviderFlag,
 	flags.RPCHost,
@@ -65,9 +67,8 @@ var appFlags = []cli.Flag{
 	flags.HistoricalSlasherNode,
 	flags.ChainID,
 	flags.NetworkID,
-	flags.WeakSubjectivityCheckpt,
+	flags.WeakSubjectivityCheckpoint,
 	flags.Eth1HeaderReqLimit,
-	flags.GenesisStatePath,
 	flags.MinPeersPerSubnet,
 	flags.SuggestedFeeRecipient,
 	cmd.EnableBackupWebhookFlag,
@@ -121,6 +122,11 @@ var appFlags = []cli.Flag{
 	cmd.BoltMMapInitialSizeFlag,
 	cmd.ValidatorMonitorIndicesFlag,
 	cmd.ApiTimeoutFlag,
+	checkpoint.BlockPath,
+	checkpoint.StatePath,
+	checkpoint.RemoteURL,
+	genesis.StatePath,
+	genesis.BeaconAPIURL,
 }
 
 func init() {
@@ -190,6 +196,9 @@ func main() {
 		if err := debug.Setup(ctx); err != nil {
 			return err
 		}
+		if err := fdlimits.SetMaxFdLimits(); err != nil {
+			return err
+		}
 		return cmd.ValidateNoArgs(ctx)
 	}
 
@@ -245,6 +254,21 @@ func startNode(ctx *cli.Context) error {
 		node.WithBlockchainFlagOptions(blockchainFlagOpts),
 		node.WithPowchainFlagOptions(powchainFlagOpts),
 	}
+
+	optFuncs := []func(*cli.Context) (node.Option, error){
+		genesis.BeaconNodeOptions,
+		checkpoint.BeaconNodeOptions,
+	}
+	for _, of := range optFuncs {
+		ofo, err := of(ctx)
+		if err != nil {
+			return err
+		}
+		if ofo != nil {
+			opts = append(opts, ofo)
+		}
+	}
+
 	beacon, err := node.New(ctx, opts...)
 	if err != nil {
 		return err

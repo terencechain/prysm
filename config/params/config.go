@@ -5,8 +5,8 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
-	types "github.com/prysmaticlabs/eth2-types"
 	fieldparams "github.com/prysmaticlabs/prysm/config/fieldparams"
+	types "github.com/prysmaticlabs/prysm/consensus-types/primitives"
 	"github.com/prysmaticlabs/prysm/encoding/bytesutil"
 )
 
@@ -137,16 +137,18 @@ type BeaconChainConfig struct {
 	SlashingProtectionPruningEpochs types.Epoch // SlashingProtectionPruningEpochs defines a period after which all prior epochs are pruned in the validator database.
 
 	// Fork-related values.
-	GenesisForkVersion   []byte                                          `yaml:"GENESIS_FORK_VERSION" spec:"true"`   // GenesisForkVersion is used to track fork version between state transitions.
-	AltairForkVersion    []byte                                          `yaml:"ALTAIR_FORK_VERSION" spec:"true"`    // AltairForkVersion is used to represent the fork version for altair.
-	AltairForkEpoch      types.Epoch                                     `yaml:"ALTAIR_FORK_EPOCH" spec:"true"`      // AltairForkEpoch is used to represent the assigned fork epoch for altair.
-	BellatrixForkVersion []byte                                          `yaml:"BELLATRIX_FORK_VERSION" spec:"true"` // BellatrixForkVersion is used to represent the fork version for bellatrix.
-	BellatrixForkEpoch   types.Epoch                                     `yaml:"BELLATRIX_FORK_EPOCH" spec:"true"`   // BellatrixForkEpoch is used to represent the assigned fork epoch for bellatrix.
-	Eip4844ForkVersion   []byte                                          // Eip4844ForkVersion is used to represent the fork version for Eip4844.
-	Eip4844ForkEpoch     types.Epoch                                     `yaml:"EIP4844_FORK_EPOCH" spec:"true"`    // Eip4844ForkEpoch is used to represent the assigned fork epoch for Eip4844.
-	ShardingForkVersion  []byte                                          `yaml:"SHARDING_FORK_VERSION" spec:"true"` // ShardingForkVersion is used to represent the fork version for sharding.
-	ShardingForkEpoch    types.Epoch                                     `yaml:"SHARDING_FORK_EPOCH" spec:"true"`   // ShardingForkEpoch is used to represent the assigned fork epoch for sharding.
-	ForkVersionSchedule  map[[fieldparams.VersionLength]byte]types.Epoch // Schedule of fork epochs by version.
+	GenesisForkVersion   []byte      `yaml:"GENESIS_FORK_VERSION" spec:"true"`   // GenesisForkVersion is used to track fork version between state transitions.
+	AltairForkVersion    []byte      `yaml:"ALTAIR_FORK_VERSION" spec:"true"`    // AltairForkVersion is used to represent the fork version for altair.
+	AltairForkEpoch      types.Epoch `yaml:"ALTAIR_FORK_EPOCH" spec:"true"`      // AltairForkEpoch is used to represent the assigned fork epoch for altair.
+	BellatrixForkVersion []byte      `yaml:"BELLATRIX_FORK_VERSION" spec:"true"` // BellatrixForkVersion is used to represent the fork version for bellatrix.
+	BellatrixForkEpoch   types.Epoch `yaml:"BELLATRIX_FORK_EPOCH" spec:"true"`   // BellatrixForkEpoch is used to represent the assigned fork epoch for bellatrix.
+	ShardingForkVersion  []byte      `yaml:"SHARDING_FORK_VERSION" spec:"true"`  // ShardingForkVersion is used to represent the fork version for sharding.
+	ShardingForkEpoch    types.Epoch `yaml:"SHARDING_FORK_EPOCH" spec:"true"`    // ShardingForkEpoch is used to represent the assigned fork epoch for sharding.
+	Eip4844ForkVersion   []byte      `yaml:"EIP4844_FORK_VERSION" spec:"true"`   // Eip4844ForkVersion is used to represent the fork version for Eip4844.
+	Eip4844ForkEpoch     types.Epoch `yaml:"EIP4844_FORK_EPOCH" spec:"true"`     // Eip4844ForkEpoch is used to represent the assigned fork epoch for Eip4844.
+
+	ForkVersionSchedule map[[fieldparams.VersionLength]byte]types.Epoch // Schedule of fork epochs by version.
+	ForkVersionNames    map[[fieldparams.VersionLength]byte]string      // Human-readable names of fork versions.
 
 	// Weak subjectivity values.
 	SafetyDecay uint64 // SafetyDecay is defined as the loss in the 1/3 consensus safety margin of the casper FFG mechanism.
@@ -198,6 +200,7 @@ type BeaconChainConfig struct {
 func (b *BeaconChainConfig) InitializeForkSchedule() {
 	// Reset Fork Version Schedule.
 	b.ForkVersionSchedule = configForkSchedule(b)
+	b.ForkVersionNames = configForkNames(b)
 }
 
 func configForkSchedule(b *BeaconChainConfig) map[[fieldparams.VersionLength]byte]types.Epoch {
@@ -210,4 +213,16 @@ func configForkSchedule(b *BeaconChainConfig) map[[fieldparams.VersionLength]byt
 	fvs[bytesutil.ToBytes4(b.BellatrixForkVersion)] = b.BellatrixForkEpoch
 	fvs[bytesutil.ToBytes4(b.Eip4844ForkVersion)] = b.Eip4844ForkEpoch
 	return fvs
+}
+
+func configForkNames(b *BeaconChainConfig) map[[fieldparams.VersionLength]byte]string {
+	fvn := map[[fieldparams.VersionLength]byte]string{}
+	// Set Genesis fork data.
+	fvn[bytesutil.ToBytes4(b.GenesisForkVersion)] = "phase0"
+	// Set Altair fork data.
+	fvn[bytesutil.ToBytes4(b.AltairForkVersion)] = "altair"
+	// Set Bellatrix fork data.
+	fvn[bytesutil.ToBytes4(b.BellatrixForkVersion)] = "bellatrix"
+	fvn[bytesutil.ToBytes4(b.Eip4844ForkVersion)] = "eip4844"
+	return fvn
 }

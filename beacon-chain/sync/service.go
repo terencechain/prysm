@@ -96,6 +96,8 @@ type blockchainService interface {
 	blockchain.TimeFetcher
 	blockchain.GenesisFetcher
 	blockchain.CanonicalFetcher
+	blockchain.OptimisticModeFetcher
+	blockchain.SlashingReceiver
 }
 
 // Service is responsible for handling all run time p2p related operations as the
@@ -157,6 +159,7 @@ func NewService(ctx context.Context, opts ...Option) *Service {
 	}
 	r.subHandler = newSubTopicHandler()
 	r.rateLimiter = newRateLimiter(r.cfg.p2p)
+	r.initCaches()
 
 	go r.registerHandlers()
 	go r.verifierRoutine()
@@ -166,8 +169,6 @@ func NewService(ctx context.Context, opts ...Option) *Service {
 
 // Start the regular sync service.
 func (s *Service) Start() {
-	s.initCaches()
-
 	s.cfg.p2p.AddConnectionHandler(s.reValidatePeer, s.sendGoodbye)
 	s.cfg.p2p.AddDisconnectionHandler(func(_ context.Context, _ peer.ID) error {
 		// no-op

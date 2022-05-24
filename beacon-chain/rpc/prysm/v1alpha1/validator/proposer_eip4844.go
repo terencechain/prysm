@@ -7,8 +7,9 @@ import (
 	"github.com/pkg/errors"
 	"github.com/prysmaticlabs/prysm/beacon-chain/core/transition/interop"
 	"github.com/prysmaticlabs/prysm/config/params"
+	"github.com/prysmaticlabs/prysm/consensus-types/wrapper"
+	enginev1 "github.com/prysmaticlabs/prysm/proto/engine/v1"
 	ethpb "github.com/prysmaticlabs/prysm/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/proto/prysm/v1alpha1/wrapper"
 )
 
 func (vs *Server) getEip4844BeaconBlock(ctx context.Context, req *ethpb.BlockRequest) (*ethpb.BeaconBlockWithBlobKZGs, *ethpb.BlobsSidecar, error) {
@@ -63,9 +64,9 @@ func (vs *Server) getEip4844BeaconBlock(ctx context.Context, req *ethpb.BlockReq
 		return nil, nil, err
 	}
 
-	blobs := make([]*ethpb.Blob, len(bundle.Blobs))
+	blobs := make([]*enginev1.Blob, len(bundle.Blobs))
 	for i, b := range bundle.Blobs {
-		blobs[i] = &ethpb.Blob{
+		blobs[i] = &enginev1.Blob{
 			Blob: b.Blob,
 		}
 	}

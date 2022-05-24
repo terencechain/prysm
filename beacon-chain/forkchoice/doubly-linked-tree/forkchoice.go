@@ -2,12 +2,15 @@ package doublylinkedtree
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/pkg/errors"
-	types "github.com/prysmaticlabs/eth2-types"
 	fieldparams "github.com/prysmaticlabs/prysm/config/fieldparams"
 	"github.com/prysmaticlabs/prysm/config/params"
+	types "github.com/prysmaticlabs/prysm/consensus-types/primitives"
+	"github.com/prysmaticlabs/prysm/encoding/bytesutil"
 	pbrpc "github.com/prysmaticlabs/prysm/proto/prysm/v1alpha1"
+	"github.com/sirupsen/logrus"
 	"go.opencensus.io/trace"
 )
 
@@ -18,6 +21,8 @@ func New(justifiedEpoch, finalizedEpoch types.Epoch) *ForkChoice {
 		finalizedEpoch:    finalizedEpoch,
 		proposerBoostRoot: [32]byte{},
 		nodeByRoot:        make(map[[fieldparams.RootLength]byte]*Node),
+		nodeByPayload:     make(map[[fieldparams.RootLength]byte]*Node),
+		slashedIndices:    make(map[types.ValidatorIndex]bool),
 		pruneThreshold:    defaultPruneThreshold,
 	}
 
@@ -67,7 +72,7 @@ func (f *ForkChoice) Head(
 		return [32]byte{}, errors.Wrap(err, "could not apply weight changes")
 	}
 
-	if err := f.store.treeRootNode.updateBestDescendant(ctx, justifiedEpoch, finalizedEpoch); err != nil {
+	if err := f.store.treeRootNode.updateBestDescendant(ctx, f.store.justifiedEpoch, f.store.finalizedEpoch); err != nil {
 		return [32]byte{}, errors.Wrap(err, "could not update best descendant")
 	}
 
@@ -168,7 +173,7 @@ func (f *ForkChoice) IsCanonical(root [32]byte) bool {
 }
 
 // IsOptimistic returns true if the given root has been optimistically synced.
-func (f *ForkChoice) IsOptimistic(_ context.Context, root [32]byte) (bool, error) {
+func (f *ForkChoice) IsOptimistic(root [32]byte) (bool, error) {
 	f.store.nodesLock.RLock()
 	defer f.store.nodesLock.RUnlock()
 
@@ -212,6 +217,10 @@ func (f *ForkChoice) AncestorRoot(ctx context.Context, root [32]byte, slot types
 // validators' latest votes.
 func (f *ForkChoice) updateBalances(newBalances []uint64) error {
 	for index, vote := range f.votes {
+		// Skip if validator has been slashed
+		if f.store.slashedIndices[types.ValidatorIndex(index)] {
+			continue
+		}
 		// Skip if validator has never voted for current root and next root (i.e. if the
 		// votes are zero hash aka genesis block), there's nothing to compute.
 		if vote.currentRoot == params.BeaconConfig().ZeroHash && vote.nextRoot == params.BeaconConfig().ZeroHash {
@@ -249,9 +258,21 @@ func (f *ForkChoice) updateBalances(newBalances []uint64) error {
 					return ErrNilNode
 				}
 				if currentNode.balance < oldBalance {
-					return errInvalidBalance
+					f.store.proposerBoostLock.RLock()
+					log.WithFields(logrus.Fields{
+						"nodeRoot":                   fmt.Sprintf("%#x", bytesutil.Trunc(vote.currentRoot[:])),
+						"oldBalance":                 oldBalance,
+						"nodeBalance":                currentNode.balance,
+						"nodeWeight":                 currentNode.weight,
+						"proposerBoostRoot":          fmt.Sprintf("%#x", bytesutil.Trunc(f.store.proposerBoostRoot[:])),
+						"previousProposerBoostRoot":  fmt.Sprintf("%#x", bytesutil.Trunc(f.store.previousProposerBoostRoot[:])),
+						"previousProposerBoostScore": f.store.previousProposerBoostScore,
+					}).Warning("node with invalid balance, setting it to zero")
+					f.store.proposerBoostLock.RUnlock()
+					currentNode.balance = 0
+				} else {
+					currentNode.balance -= oldBalance
 				}
-				currentNode.balance -= oldBalance
 			}
 		}
 
@@ -302,6 +323,42 @@ func (f *ForkChoice) ForkChoiceNodes() []*pbrpc.ForkChoiceNode {
 }
 
 // SetOptimisticToInvalid removes a block with an invalid execution payload from fork choice store
-func (f *ForkChoice) SetOptimisticToInvalid(ctx context.Context, root [fieldparams.RootLength]byte) error {
-	return f.store.removeNode(ctx, root)
+func (f *ForkChoice) SetOptimisticToInvalid(ctx context.Context, root, parentRoot, payloadHash [fieldparams.RootLength]byte) ([][32]byte, error) {
+	return f.store.setOptimisticToInvalid(ctx, root, parentRoot, payloadHash)
+}
+
+// InsertSlashedIndex adds the given slashed validator index to the
+// store-tracked list. Votes from these validators are not accounted for
+// in forkchoice.
+func (f *ForkChoice) InsertSlashedIndex(_ context.Context, index types.ValidatorIndex) {
+	f.store.nodesLock.Lock()
+	defer f.store.nodesLock.Unlock()
+	// return early if the index was already included:
+	if f.store.slashedIndices[index] {
+		return
+	}
+	f.store.slashedIndices[index] = true
+
+	// Subtract last vote from this equivocating validator
+	f.votesLock.RLock()
+	defer f.votesLock.RUnlock()
+
+	if index >= types.ValidatorIndex(len(f.balances)) {
+		return
+	}
+
+	if index >= types.ValidatorIndex(len(f.votes)) {
+		return
+	}
+
+	node, ok := f.store.nodeByRoot[f.votes[index].currentRoot]
+	if !ok || node == nil {
+		return
+	}
+
+	if node.balance < f.balances[index] {
+		node.balance = 0
+	} else {
+		node.balance -= f.balances[index]
+	}
 }

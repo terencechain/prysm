@@ -4,9 +4,9 @@ import (
 	"sync"
 
 	lru "github.com/hashicorp/golang-lru"
-	types "github.com/prysmaticlabs/eth2-types"
 	"github.com/prysmaticlabs/prysm/beacon-chain/state"
 	lruwrpr "github.com/prysmaticlabs/prysm/cache/lru"
+	types "github.com/prysmaticlabs/prysm/consensus-types/primitives"
 	"github.com/prysmaticlabs/prysm/runtime/version"
 )
 
@@ -53,7 +53,7 @@ func (c *SyncCommitteeHeadStateCache) Get(slot types.Slot) (state.BeaconState, e
 		return nil, ErrIncorrectType
 	}
 	switch st.Version() {
-	case version.Altair, version.Bellatrix, version.EIP4844:
+	case version.Altair, version.Bellatrix, version.Eip4844:
 	default:
 		return nil, ErrIncorrectType
 	}

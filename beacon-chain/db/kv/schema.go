@@ -49,11 +49,14 @@ var (
 
 	// Below keys are used to identify objects are to be fork compatible.
 	// Objects that are only compatible with specific forks should be prefixed with such keys.
-	altairKey    = []byte("altair")
-	bellatrixKey = []byte("merge")
-	miniDankKey  = []byte("mini-dank")
+	altairKey         = []byte("altair")
+	bellatrixKey      = []byte("merge")
+	bellatrixBlindKey = []byte("blind-bellatrix")
+	eip4844Key        = []byte("eip4844")
 	// block root included in the beacon state used by weak subjectivity initial sync
-	originBlockRootKey = []byte("origin-block-root")
+	originCheckpointBlockRootKey = []byte("origin-checkpoint-block-root")
+	// block root tracking the progress of backfill, or pointing at genesis if backfill has not been initiated
+	backfillBlockRootKey = []byte("backfill-block-root")
 
 	// Deprecated: This index key was migrated in PR 6461. Do not use, except for migrations.
 	lastArchivedIndexKey = []byte("last-archived")

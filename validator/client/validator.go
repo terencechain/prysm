@@ -9,6 +9,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"io"
+	"math"
 	"strconv"
 	"strings"
 	"sync"
@@ -19,18 +20,18 @@ import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	lru "github.com/hashicorp/golang-lru"
 	"github.com/pkg/errors"
-	types "github.com/prysmaticlabs/eth2-types"
 	"github.com/prysmaticlabs/prysm/async/event"
 	"github.com/prysmaticlabs/prysm/beacon-chain/core/altair"
 	"github.com/prysmaticlabs/prysm/config/features"
 	fieldparams "github.com/prysmaticlabs/prysm/config/fieldparams"
 	"github.com/prysmaticlabs/prysm/config/params"
 	validator_service_config "github.com/prysmaticlabs/prysm/config/validator/service"
+	"github.com/prysmaticlabs/prysm/consensus-types/interfaces"
+	types "github.com/prysmaticlabs/prysm/consensus-types/primitives"
+	"github.com/prysmaticlabs/prysm/consensus-types/wrapper"
 	"github.com/prysmaticlabs/prysm/crypto/hash"
 	"github.com/prysmaticlabs/prysm/encoding/bytesutil"
 	ethpb "github.com/prysmaticlabs/prysm/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/proto/prysm/v1alpha1/block"
-	"github.com/prysmaticlabs/prysm/proto/prysm/v1alpha1/wrapper"
 	"github.com/prysmaticlabs/prysm/time/slots"
 	accountsiface "github.com/prysmaticlabs/prysm/validator/accounts/iface"
 	"github.com/prysmaticlabs/prysm/validator/accounts/wallet"
@@ -94,7 +95,7 @@ type validator struct {
 	graffiti                           []byte
 	voteStats                          voteStats
 	Web3SignerConfig                   *remote_web3signer.SetupConfig
-	prepareBeaconProposalConfig        *validator_service_config.FeeRecipientConfig
+	feeRecipientConfig                 *validator_service_config.FeeRecipientConfig
 	walletIntializedChannel            chan *wallet.Wallet
 }
 
@@ -117,6 +118,7 @@ func (v *validator) WaitForKeymanagerInitialization(ctx context.Context) error {
 	}
 
 	if v.useWeb && v.wallet == nil {
+		log.Info("Waiting for keymanager to initialize validator client with web UI")
 		// if wallet is not set, wait for it to be set through the UI
 		km, err := waitForWebWalletInitialization(ctx, v.walletInitializedFeed, v.walletIntializedChannel)
 		if err != nil {
@@ -338,21 +340,21 @@ func (v *validator) ReceiveBlocks(ctx context.Context, connectionErrorChannel ch
 		if res == nil || res.Block == nil {
 			continue
 		}
-		if res.GetPhase0Block() == nil && res.GetAltairBlock() == nil {
+		var blk interfaces.SignedBeaconBlock
+		switch b := res.Block.(type) {
+		case *ethpb.StreamBlocksResponse_Phase0Block:
+			blk, err = wrapper.WrappedSignedBeaconBlock(b.Phase0Block)
+		case *ethpb.StreamBlocksResponse_AltairBlock:
+			blk, err = wrapper.WrappedSignedBeaconBlock(b.AltairBlock)
+		case *ethpb.StreamBlocksResponse_BellatrixBlock:
+			blk, err = wrapper.WrappedSignedBeaconBlock(b.BellatrixBlock)
+		}
+		if err != nil {
+			log.WithError(err).Error("Failed to wrap signed block")
 			continue
 		}
-		var blk block.SignedBeaconBlock
-		switch {
-		case res.GetPhase0Block() != nil:
-			blk = wrapper.WrappedPhase0SignedBeaconBlock(res.GetPhase0Block())
-		case res.GetAltairBlock() != nil:
-			blk, err = wrapper.WrappedAltairSignedBeaconBlock(res.GetAltairBlock())
-			if err != nil {
-				log.WithError(err).Error("Failed to wrap altair signed block")
-				continue
-			}
-		}
 		if blk == nil || blk.IsNil() {
+			log.Error("Received nil block")
 			continue
 		}
 		if blk.Block().Slot() > v.highestValidSlot {
@@ -938,6 +940,19 @@ func (v *validator) logDuties(slot types.Slot, duties []*ethpb.DutiesResponse_Du
 
 // UpdateFeeRecipient calls the prepareBeaconProposer RPC to set the fee recipient.
 func (v *validator) UpdateFeeRecipient(ctx context.Context, km keymanager.IKeymanager) error {
+	// only used after Bellatrix
+	if v.feeRecipientConfig == nil {
+		e := params.BeaconConfig().BellatrixForkEpoch
+		if e != math.MaxUint64 && slots.ToEpoch(slots.CurrentSlot(v.genesisTime)) < e {
+			log.Warn("After the Ethereum merge, you will need to specify the Ethereum addresses which will receive transaction fee rewards from proposing blocks. " +
+				"This is known as a fee recipient configuration. You can read more about this feature in our documentation portal here (https://docs.prylabs.network/docs/execution-node/fee-recipient)")
+		} else {
+			log.Warn("In order to receive transaction fees from proposing blocks, " +
+				"you must now specify a configuration known as a fee recipient config. " +
+				"If it not provided, transaction fees will be burnt. Please see our documentation for more information on this requirement (https://docs.prylabs.network/docs/execution-node/fee-recipient).")
+		}
+		return nil
+	}
 	if km == nil {
 		return errors.New("keymanager is nil when calling PrepareBeaconProposer")
 	}
@@ -981,13 +996,18 @@ func (v *validator) feeRecipients(ctx context.Context, pubkeys [][fieldparams.BL
 			validatorIndex = ind
 			v.pubkeyToValidatorIndex[key] = validatorIndex
 		}
-		if v.prepareBeaconProposalConfig.ProposeConfig != nil {
-			option, ok := v.prepareBeaconProposalConfig.ProposeConfig[key]
-			if option != nil && ok {
+		if v.feeRecipientConfig.DefaultConfig != nil {
+			feeRecipient = v.feeRecipientConfig.DefaultConfig.FeeRecipient
+		}
+		if v.feeRecipientConfig.ProposeConfig != nil {
+			option, ok := v.feeRecipientConfig.ProposeConfig[key]
+			if ok && option != nil {
+				// override the default if a proposeconfig is set
 				feeRecipient = option.FeeRecipient
-			} else {
-				feeRecipient = v.prepareBeaconProposalConfig.DefaultConfig.FeeRecipient
 			}
+		}
+		if hexutil.Encode(feeRecipient.Bytes()) == fieldparams.EthBurnAddressHex {
+			log.Warnln("Fee recipient is set to the burn address. You will not be rewarded transaction fees on this setting. Please set a different fee recipient.")
 		}
 		validatorToFeeRecipientArray = append(validatorToFeeRecipientArray, &ethpb.PrepareBeaconProposerRequest_FeeRecipientContainer{
 			ValidatorIndex: validatorIndex,

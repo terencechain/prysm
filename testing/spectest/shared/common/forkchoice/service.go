@@ -9,6 +9,7 @@ import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/prysmaticlabs/prysm/beacon-chain/blockchain"
 	mock "github.com/prysmaticlabs/prysm/beacon-chain/blockchain/testing"
+	"github.com/prysmaticlabs/prysm/beacon-chain/cache"
 	"github.com/prysmaticlabs/prysm/beacon-chain/cache/depositcache"
 	coreTime "github.com/prysmaticlabs/prysm/beacon-chain/core/time"
 	testDB "github.com/prysmaticlabs/prysm/beacon-chain/db/testing"
@@ -17,14 +18,14 @@ import (
 	"github.com/prysmaticlabs/prysm/beacon-chain/state"
 	"github.com/prysmaticlabs/prysm/beacon-chain/state/stategen"
 	"github.com/prysmaticlabs/prysm/config/params"
+	"github.com/prysmaticlabs/prysm/consensus-types/interfaces"
 	"github.com/prysmaticlabs/prysm/encoding/bytesutil"
 	pb "github.com/prysmaticlabs/prysm/proto/engine/v1"
 	ethpb "github.com/prysmaticlabs/prysm/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/proto/prysm/v1alpha1/block"
 	"github.com/prysmaticlabs/prysm/testing/require"
 )
 
-func startChainService(t *testing.T, st state.BeaconState, block block.SignedBeaconBlock, engineMock *engineMock) *blockchain.Service {
+func startChainService(t testing.TB, st state.BeaconState, block interfaces.SignedBeaconBlock, engineMock *engineMock) *blockchain.Service {
 	db := testDB.SetupDB(t)
 	ctx := context.Background()
 	require.NoError(t, db.SaveBlock(ctx, block))
@@ -36,6 +37,7 @@ func startChainService(t *testing.T, st state.BeaconState, block block.SignedBea
 		Epoch: coreTime.CurrentEpoch(st),
 		Root:  r[:],
 	}
+
 	require.NoError(t, db.SaveJustifiedCheckpoint(ctx, cp))
 	require.NoError(t, db.SaveFinalizedCheckpoint(ctx, cp))
 	attPool, err := attestations.NewService(ctx, &attestations.Config{
@@ -56,6 +58,7 @@ func startChainService(t *testing.T, st state.BeaconState, block block.SignedBea
 		blockchain.WithStateNotifier(&mock.MockStateNotifier{}),
 		blockchain.WithAttestationPool(attestations.NewPool()),
 		blockchain.WithDepositCache(depositCache),
+		blockchain.WithProposerIdsCache(cache.NewProposerPayloadIDsCache()),
 	)
 	service, err := blockchain.NewService(context.Background(), opts...)
 	require.NoError(t, err)
@@ -98,4 +101,8 @@ func (m *engineMock) ExecutionBlockByHash(_ context.Context, hash common.Hash) (
 		TotalDifficulty: tdHex,
 		Hash:            b.BlockHash,
 	}, nil
+}
+
+func (m *engineMock) GetTerminalBlockHash(context.Context) ([]byte, bool, error) {
+	return nil, false, nil
 }

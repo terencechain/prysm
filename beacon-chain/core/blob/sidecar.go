@@ -1,9 +1,9 @@
 package blob
 
 import (
+	types2 "github.com/ethereum/go-ethereum/core/types"
 	"github.com/pkg/errors"
-	types2 "github.com/protolambda/go-ethereum/core/types"
-	types "github.com/prysmaticlabs/eth2-types"
+	types "github.com/prysmaticlabs/prysm/consensus-types/primitives"
 	"github.com/prysmaticlabs/prysm/encoding/bytesutil"
 	eth "github.com/prysmaticlabs/prysm/proto/prysm/v1alpha1"
 )

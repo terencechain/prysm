@@ -4,7 +4,10 @@ import (
 	"encoding/json"
 	"math/big"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/protolambda/go-ethereum/core/types"
+	"github.com/protolambda/go-ethereum/params"
 	fieldparams "github.com/prysmaticlabs/prysm/config/fieldparams"
 	"github.com/prysmaticlabs/prysm/encoding/bytesutil"
 )
@@ -74,7 +77,7 @@ func (e *ExecutionBlock) MarshalJSON() ([]byte, error) {
 	size := new(big.Int).SetBytes(e.Size)
 	sizeHex := hexutil.EncodeBig(size)
 
-	baseFee := new(big.Int).SetBytes(e.BaseFeePerGas)
+	baseFee := new(big.Int).SetBytes(bytesutil.ReverseByteOrder(e.BaseFeePerGas))
 	baseFeeHex := hexutil.EncodeBig(baseFee)
 	return json.Marshal(executionBlockJSON{
 		Number:           numHex,
@@ -143,7 +146,7 @@ func (e *ExecutionBlock) UnmarshalJSON(enc []byte) error {
 	if err != nil {
 		return err
 	}
-	e.BaseFeePerGas = baseFee.Bytes()
+	e.BaseFeePerGas = bytesutil.PadTo(bytesutil.ReverseByteOrder(baseFee.Bytes()), fieldparams.RootLength)
 	transactions := make([][]byte, len(dec.Transactions))
 	for i, tx := range dec.Transactions {
 		transactions[i] = tx
@@ -356,27 +359,28 @@ func (f *ForkchoiceState) UnmarshalJSON(enc []byte) error {
 }
 
 type blobBundleJSON struct {
-	BlockHash hexutil.Bytes   `json:"blockHash"`
-	Kzgs      []hexutil.Bytes `json:"kzgs"`
-	Blobs     []hexutil.Bytes `json:"blobs"`
+	BlockHash common.Hash                                          `json:"blockHash"`
+	Kzgs      []types.KZGCommitment                                `json:"kzgs"`
+	Blobs     [][params.FieldElementsPerBlob]types.BLSFieldElement `json:"blobs"`
 }
 
 // MarshalJSON --
 func (b *BlobsBundle) MarshalJSON() ([]byte, error) {
-	kzgs := make([]hexutil.Bytes, len(b.Kzg))
+	kzgs := make([]types.KZGCommitment, len(b.Kzg))
 	for i, kzg := range b.Kzg {
-		kzgs[i] = kzg
+		kzgs[i] = bytesutil.ToBytes48(kzg)
 	}
-	blobs := make([]hexutil.Bytes, len(b.Blobs))
-	for i, blob := range b.Blobs {
-		var flattenBlob []byte
-		for _, bytes := range blob.Blob {
-			flattenBlob = append(flattenBlob, bytes...)
+	blobs := make([][params.FieldElementsPerBlob]types.BLSFieldElement, len(b.Blobs))
+	for _, b1 := range b.Blobs {
+		var blob [params.FieldElementsPerBlob]types.BLSFieldElement
+		for i, b2 := range b1.Blob {
+			blob[i] = bytesutil.ToBytes32(b2)
 		}
-		blobs[i] = flattenBlob
+		blobs = append(blobs, blob)
 	}
+
 	return json.Marshal(blobBundleJSON{
-		BlockHash: b.BlockHash,
+		BlockHash: bytesutil.ToBytes32(b.BlockHash),
 		Kzgs:      kzgs,
 		Blobs:     blobs,
 	})
@@ -389,19 +393,17 @@ func (e *BlobsBundle) UnmarshalJSON(enc []byte) error {
 		return err
 	}
 	*e = BlobsBundle{}
-	e.BlockHash = bytesutil.PadTo(dec.BlockHash, fieldparams.RootLength)
+	e.BlockHash = bytesutil.PadTo(dec.BlockHash.Bytes(), fieldparams.RootLength)
 	kzgs := make([][]byte, len(dec.Kzgs))
 	for i, kzg := range dec.Kzgs {
-		kzgs[i] = bytesutil.PadTo(kzg, fieldparams.BLSPubkeyLength)
+		kzgs[i] = bytesutil.PadTo(kzg[:], fieldparams.BLSPubkeyLength)
 	}
 	e.Kzg = kzgs
 	blobs := make([]*Blob, len(dec.Blobs))
 	for i, blob := range dec.Blobs {
 		b := &Blob{}
-		for x := 0; x < 4096; x++ {
-			for y := 0; y < 32; y++ {
-				b.Blob[x][y] = blob[x*32+y]
-			}
+		for _, fe := range blob {
+			b.Blob = append(b.Blob, fe[:])
 		}
 		blobs[i] = b
 	}

@@ -7,7 +7,7 @@ import (
 	"sync"
 	"time"
 
-	types "github.com/prysmaticlabs/eth2-types"
+	types "github.com/prysmaticlabs/prysm/consensus-types/primitives"
 	"github.com/prysmaticlabs/prysm/validator/accounts/iface"
 	iface2 "github.com/prysmaticlabs/prysm/validator/client/iface"
 	"github.com/prysmaticlabs/prysm/validator/keymanager"
@@ -179,7 +179,7 @@ func (_ MockValidator) CheckDoppelGanger(_ context.Context) error {
 	panic("implement me")
 }
 
-// PrepareBeaconProposer for mocking
+// UpdateFeeRecipient for mocking
 func (_ MockValidator) UpdateFeeRecipient(_ context.Context, _ keymanager.IKeymanager) error {
 	panic("implement me")
 }

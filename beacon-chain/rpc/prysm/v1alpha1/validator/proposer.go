@@ -10,15 +10,15 @@ import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	emptypb "github.com/golang/protobuf/ptypes/empty"
 	"github.com/pkg/errors"
-	types "github.com/prysmaticlabs/eth2-types"
 	"github.com/prysmaticlabs/prysm/beacon-chain/core/feed"
 	blockfeed "github.com/prysmaticlabs/prysm/beacon-chain/core/feed/block"
 	"github.com/prysmaticlabs/prysm/beacon-chain/core/transition"
 	"github.com/prysmaticlabs/prysm/config/params"
+	"github.com/prysmaticlabs/prysm/consensus-types/interfaces"
+	types "github.com/prysmaticlabs/prysm/consensus-types/primitives"
+	"github.com/prysmaticlabs/prysm/consensus-types/wrapper"
 	"github.com/prysmaticlabs/prysm/encoding/bytesutil"
 	ethpb "github.com/prysmaticlabs/prysm/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/proto/prysm/v1alpha1/block"
-	"github.com/prysmaticlabs/prysm/proto/prysm/v1alpha1/wrapper"
 	"github.com/prysmaticlabs/prysm/time/slots"
 	"github.com/sirupsen/logrus"
 	"go.opencensus.io/trace"
@@ -66,7 +66,7 @@ func (vs *Server) GetBeaconBlock(ctx context.Context, req *ethpb.BlockRequest) (
 	}
 	blk, sideCar, err := vs.getEip4844BeaconBlock(ctx, req)
 	if err != nil {
-		return nil, status.Errorf(codes.Internal, "Could not fetch eip4844 beacon block: %v", err)
+		return nil, status.Errorf(codes.Internal, "Could not fetch EIP-4844 beacon block: %v", err)
 	}
 	return &ethpb.GenericBeaconBlock{Block: &ethpb.GenericBeaconBlock_Eip4844{Eip4844: &ethpb.BeaconBlockWithBlobKZGsAndBlobsSidecar{Block: blk, Sidecar: sideCar}}}, nil
 }
@@ -93,28 +93,9 @@ func (vs *Server) GetBlock(ctx context.Context, req *ethpb.BlockRequest) (*ethpb
 func (vs *Server) ProposeBeaconBlock(ctx context.Context, req *ethpb.GenericSignedBeaconBlock) (*ethpb.ProposeResponse, error) {
 	ctx, span := trace.StartSpan(ctx, "ProposerServer.ProposeBeaconBlock")
 	defer span.End()
-	var blk block.SignedBeaconBlock
-	var err error
-	switch b := req.Block.(type) {
-	case *ethpb.GenericSignedBeaconBlock_Phase0:
-		blk = wrapper.WrappedPhase0SignedBeaconBlock(b.Phase0)
-	case *ethpb.GenericSignedBeaconBlock_Altair:
-		blk, err = wrapper.WrappedAltairSignedBeaconBlock(b.Altair)
-		if err != nil {
-			return nil, status.Error(codes.Internal, "could not wrap altair beacon block")
-		}
-	case *ethpb.GenericSignedBeaconBlock_Bellatrix:
-		blk, err = wrapper.WrappedBellatrixSignedBeaconBlock(b.Bellatrix)
-		if err != nil {
-			return nil, status.Error(codes.Internal, "could not wrap Bellatrix beacon block")
-		}
-	case *ethpb.GenericSignedBeaconBlock_Eip4844:
-		blk, err = wrapper.WrappedEip4844SignedBeaconBlock(b.Eip4844.Block)
-		if err != nil {
-			return nil, status.Error(codes.Internal, "could not wrap eip4844 beacon block")
-		}
-	default:
-		return nil, status.Error(codes.Internal, "block version not supported")
+	blk, err := wrapper.WrappedSignedBeaconBlock(req.Block)
+	if err != nil {
+		return nil, status.Errorf(codes.InvalidArgument, "Could not decode block: %v", err)
 	}
 	return vs.proposeGenericBeaconBlock(ctx, blk)
 }
@@ -126,7 +107,10 @@ func (vs *Server) ProposeBeaconBlock(ctx context.Context, req *ethpb.GenericSign
 func (vs *Server) ProposeBlock(ctx context.Context, rBlk *ethpb.SignedBeaconBlock) (*ethpb.ProposeResponse, error) {
 	ctx, span := trace.StartSpan(ctx, "ProposerServer.ProposeBlock")
 	defer span.End()
-	blk := wrapper.WrappedPhase0SignedBeaconBlock(rBlk)
+	blk, err := wrapper.WrappedSignedBeaconBlock(rBlk)
+	if err != nil {
+		return nil, status.Errorf(codes.InvalidArgument, "Could not decode block: %v", err)
+	}
 	return vs.proposeGenericBeaconBlock(ctx, blk)
 }
 
@@ -155,7 +139,7 @@ func (vs *Server) PrepareBeaconProposer(
 	return &emptypb.Empty{}, nil
 }
 
-func (vs *Server) proposeGenericBeaconBlock(ctx context.Context, blk block.SignedBeaconBlock) (*ethpb.ProposeResponse, error) {
+func (vs *Server) proposeGenericBeaconBlock(ctx context.Context, blk interfaces.SignedBeaconBlock) (*ethpb.ProposeResponse, error) {
 	ctx, span := trace.StartSpan(ctx, "ProposerServer.proposeGenericBeaconBlock")
 	defer span.End()
 	root, err := blk.Block().HashTreeRoot()
@@ -192,7 +176,7 @@ func (vs *Server) proposeGenericBeaconBlock(ctx context.Context, blk block.Signe
 
 // computeStateRoot computes the state root after a block has been processed through a state transition and
 // returns it to the validator client.
-func (vs *Server) computeStateRoot(ctx context.Context, block block.SignedBeaconBlock) ([]byte, error) {
+func (vs *Server) computeStateRoot(ctx context.Context, block interfaces.SignedBeaconBlock) ([]byte, error) {
 	beaconState, err := vs.StateGen.StateByRoot(ctx, bytesutil.ToBytes32(block.Block().ParentRoot()))
 	if err != nil {
 		return nil, errors.Wrap(err, "could not retrieve beacon state")

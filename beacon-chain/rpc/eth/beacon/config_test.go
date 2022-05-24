@@ -6,8 +6,8 @@ import (
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
-	types "github.com/prysmaticlabs/eth2-types"
 	"github.com/prysmaticlabs/prysm/config/params"
+	types "github.com/prysmaticlabs/prysm/consensus-types/primitives"
 	"github.com/prysmaticlabs/prysm/encoding/bytesutil"
 	"github.com/prysmaticlabs/prysm/testing/assert"
 	"github.com/prysmaticlabs/prysm/testing/require"
@@ -16,7 +16,7 @@ import (
 
 func TestGetSpec(t *testing.T) {
 	params.SetupTestConfigCleanup(t)
-	config := params.BeaconConfig()
+	config := params.BeaconConfig().Copy()
 
 	config.ConfigName = "ConfigName"
 	config.PresetBase = "PresetBase"
@@ -353,7 +353,7 @@ func TestGetDepositContract(t *testing.T) {
 	const chainId = 99
 	const address = "0x0000000000000000000000000000000000000009"
 	params.SetupTestConfigCleanup(t)
-	config := params.BeaconConfig()
+	config := params.BeaconConfig().Copy()
 	config.DepositChainID = chainId
 	config.DepositContractAddress = address
 	params.OverrideBeaconConfig(config)
@@ -372,7 +372,7 @@ func TestForkSchedule_Ok(t *testing.T) {
 	thirdForkVersion, thirdForkEpoch := []byte("Thir"), types.Epoch(300)
 
 	params.SetupTestConfigCleanup(t)
-	config := params.BeaconConfig()
+	config := params.BeaconConfig().Copy()
 	config.GenesisForkVersion = genesisForkVersion
 	// Create fork schedule adding keys in non-sorted order.
 	schedule := make(map[[4]byte]types.Epoch, 3)

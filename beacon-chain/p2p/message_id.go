@@ -2,9 +2,9 @@ package p2p
 
 import (
 	pubsub_pb "github.com/libp2p/go-libp2p-pubsub/pb"
-	types "github.com/prysmaticlabs/eth2-types"
 	"github.com/prysmaticlabs/prysm/beacon-chain/p2p/encoder"
 	"github.com/prysmaticlabs/prysm/config/params"
+	types "github.com/prysmaticlabs/prysm/consensus-types/primitives"
 	"github.com/prysmaticlabs/prysm/crypto/hash"
 	"github.com/prysmaticlabs/prysm/encoding/bytesutil"
 	"github.com/prysmaticlabs/prysm/math"
@@ -78,7 +78,7 @@ func postAltairMsgID(pmsg *pubsub_pb.Message, fEpoch types.Epoch) string {
 
 	// beyond Bellatrix epoch, allow 10 Mib gossip data size
 	gossipPubSubSize := params.BeaconNetworkConfig().GossipMaxSize
-	if fEpoch >= params.BeaconConfig().BellatrixForkEpoch {
+	if fEpoch >= params.BeaconConfig().BellatrixForkEpoch || fEpoch >= params.BeaconConfig().Eip4844ForkEpoch {
 		gossipPubSubSize = params.BeaconNetworkConfig().GossipMaxSizeBellatrix
 	}
 

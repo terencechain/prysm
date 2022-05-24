@@ -4,12 +4,12 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"io/ioutil"
 	"math/big"
 	"os"
 	"os/exec"
 	"path"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/bazelbuild/rules_go/go/tools/bazel"
@@ -34,6 +34,7 @@ type Miner struct {
 	bootstrapEnr string
 	enr          string
 	keystorePath string
+	cmd          *exec.Cmd
 }
 
 // NewMiner creates and returns an ETH1 node miner.
@@ -109,15 +110,18 @@ func (m *Miner) Start(ctx context.Context) error {
 		fmt.Sprintf("--datadir=%s", eth1Path),
 		fmt.Sprintf("--http.port=%d", e2e.TestParams.Ports.Eth1RPCPort),
 		fmt.Sprintf("--ws.port=%d", e2e.TestParams.Ports.Eth1WSPort),
+		fmt.Sprintf("--authrpc.port=%d", e2e.TestParams.Ports.Eth1AuthRPCPort),
 		fmt.Sprintf("--bootnodes=%s", m.bootstrapEnr),
 		fmt.Sprintf("--port=%d", e2e.TestParams.Ports.Eth1Port),
 		fmt.Sprintf("--networkid=%d", NetworkId),
 		"--http",
+		"--http.api=engine,net,eth",
 		"--http.addr=127.0.0.1",
 		"--http.corsdomain=\"*\"",
 		"--http.vhosts=\"*\"",
 		"--rpc.allow-unprotected-txs",
 		"--ws",
+		"--ws.api=net,eth,engine",
 		"--ws.addr=127.0.0.1",
 		"--ws.origins=\"*\"",
 		"--ipcdisable",
@@ -125,6 +129,7 @@ func (m *Miner) Start(ctx context.Context) error {
 		"--mine",
 		"--unlock=0x878705ba3f8bc32fcf7f4caa1a35e72af65cf766",
 		"--allow-insecure-unlock",
+		"--txpool.locals=0x878705ba3f8bc32fcf7f4caa1a35e72af65cf766",
 		fmt.Sprintf("--password=%s", eth1Path+"/keystore/"+minerPasswordFile),
 	}
 
@@ -132,7 +137,7 @@ func (m *Miner) Start(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	jsonBytes, err := ioutil.ReadFile(keystorePath) // #nosec G304 -- ReadFile is safe
+	jsonBytes, err := os.ReadFile(keystorePath) // #nosec G304 -- ReadFile is safe
 	if err != nil {
 		return err
 	}
@@ -158,7 +163,7 @@ func (m *Miner) Start(ctx context.Context) error {
 		return fmt.Errorf("failed to start eth1 chain: %w", err)
 	}
 
-	if err = helpers.WaitForTextInFile(file, "Commit new mining work"); err != nil {
+	if err = helpers.WaitForTextInFile(file, "Commit new sealing work"); err != nil {
 		return fmt.Errorf("mining log not found, this means the eth1 chain had issues starting: %w", err)
 	}
 	if err = helpers.WaitForTextInFile(file, "Started P2P networking"); err != nil {
@@ -224,6 +229,7 @@ func (m *Miner) Start(ctx context.Context) error {
 	// Mark node as ready.
 	close(m.started)
 
+	m.cmd = runCmd
 	return runCmd.Wait()
 }
 
@@ -232,8 +238,23 @@ func (m *Miner) Started() <-chan struct{} {
 	return m.started
 }
 
+// Pause pauses the component and its underlying process.
+func (m *Miner) Pause() error {
+	return m.cmd.Process.Signal(syscall.SIGSTOP)
+}
+
+// Resume resumes the component and its underlying process.
+func (m *Miner) Resume() error {
+	return m.cmd.Process.Signal(syscall.SIGCONT)
+}
+
+// Stop kills the component and its underlying process.
+func (m *Miner) Stop() error {
+	return m.cmd.Process.Kill()
+}
+
 func enodeFromLogFile(name string) (string, error) {
-	byteContent, err := ioutil.ReadFile(name) // #nosec G304
+	byteContent, err := os.ReadFile(name) // #nosec G304
 	if err != nil {
 		return "", err
 	}

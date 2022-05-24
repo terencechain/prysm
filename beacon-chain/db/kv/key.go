@@ -17,9 +17,16 @@ func hasBellatrixKey(enc []byte) bool {
 	return bytes.Equal(enc[:len(bellatrixKey)], bellatrixKey)
 }
 
-func hasMiniDankKey(enc []byte) bool {
-	if len(miniDankKey) >= len(enc) {
+func hasBellatrixBlindKey(enc []byte) bool {
+	if len(bellatrixBlindKey) >= len(enc) {
 		return false
 	}
-	return bytes.Equal(enc[:len(miniDankKey)], miniDankKey)
+	return bytes.Equal(enc[:len(bellatrixBlindKey)], bellatrixBlindKey)
+}
+
+func hasEip4844Key(enc []byte) bool {
+	if len(eip4844Key) >= len(enc) {
+		return false
+	}
+	return bytes.Equal(enc[:len(eip4844Key)], miniDankKey)
 }
