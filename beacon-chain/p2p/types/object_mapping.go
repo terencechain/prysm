@@ -41,8 +41,8 @@ func InitializeDataMaps() {
 		bytesutil.ToBytes4(params.BeaconConfig().BellatrixForkVersion): func() (interfaces.SignedBeaconBlock, error) {
 			return wrapper.WrappedSignedBeaconBlock(&ethpb.SignedBeaconBlockBellatrix{Block: &ethpb.BeaconBlockBellatrix{}})
 		},
-		bytesutil.ToBytes4(params.BeaconConfig().Eip4844ForkVersion): func() (block.SignedBeaconBlock, error) {
-			return wrapper.WrappedEip4844SignedBeaconBlock(&ethpb.SignedBeaconBlockWithBlobKZGs{Block: &ethpb.BeaconBlockWithBlobKZGs{}})
+		bytesutil.ToBytes4(params.BeaconConfig().Eip4844ForkVersion): func() (interfaces.SignedBeaconBlock, error) {
+			return wrapper.WrappedSignedBeaconBlock(&ethpb.SignedBeaconBlockWithBlobKZGs{Block: &ethpb.BeaconBlockWithBlobKZGs{}})
 		},
 	}
 

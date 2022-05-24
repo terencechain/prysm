@@ -7,17 +7,17 @@ import (
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"github.com/pkg/errors"
 	kbls "github.com/protolambda/go-kzg/bls"
-	types "github.com/prysmaticlabs/eth2-types"
 	"github.com/prysmaticlabs/prysm/beacon-chain/core/altair"
 	"github.com/prysmaticlabs/prysm/beacon-chain/core/signing"
-	"github.com/prysmaticlabs/prysm/config/features"
 	"github.com/prysmaticlabs/prysm/config/params"
+	"github.com/prysmaticlabs/prysm/consensus-types/interfaces"
+	types "github.com/prysmaticlabs/prysm/consensus-types/primitives"
 	"github.com/prysmaticlabs/prysm/crypto/bls"
 	"github.com/prysmaticlabs/prysm/encoding/bytesutil"
 	"github.com/prysmaticlabs/prysm/monitoring/tracing"
 	"github.com/prysmaticlabs/prysm/network/forks"
+	enginev1 "github.com/prysmaticlabs/prysm/proto/engine/v1"
 	ethpb "github.com/prysmaticlabs/prysm/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/proto/prysm/v1alpha1/block"
 	"github.com/prysmaticlabs/prysm/time/slots"
 	"go.opencensus.io/trace"
 )
@@ -91,7 +91,7 @@ func (s *Service) validateBlobsSidecar(ctx context.Context, pid peer.ID, msg *pu
 	return pubsub.ValidationAccept, nil
 }
 
-func (s *Service) validateBlobsSidecarSignature(ctx context.Context, blk block.SignedBeaconBlock, m *ethpb.SignedBlobsSidecar) (pubsub.ValidationResult, error) {
+func (s *Service) validateBlobsSidecarSignature(ctx context.Context, blk interfaces.SignedBeaconBlock, m *ethpb.SignedBlobsSidecar) (pubsub.ValidationResult, error) {
 	currentEpoch := slots.ToEpoch(m.Message.BeaconBlockSlot)
 	fork, err := forks.Fork(currentEpoch)
 	if err != nil {
@@ -116,27 +116,21 @@ func (s *Service) validateBlobsSidecarSignature(ctx context.Context, blk block.S
 	if err != nil {
 		return pubsub.ValidationReject, err
 	}
-	if features.Get().EnableBatchVerification {
-		pKey, err := bls.PublicKeyFromBytes(proposerPubKey[:])
-		sigRoot, err := signing.ComputeSigningRoot(blobSigning, domain)
-		if err != nil {
-			return pubsub.ValidationReject, err
-		}
-
-		set := &bls.SignatureBatch{
-			Messages:   [][32]byte{sigRoot},
-			PublicKeys: []bls.PublicKey{pKey},
-			Signatures: [][]byte{m.Signature},
-		}
-		return s.validateWithBatchVerifier(ctx, "blobs sidecar signature", set)
-	}
-	if err := signing.VerifySigningRoot(blobSigning, proposerPubKey[:], m.Signature, domain); err != nil {
+	pKey, err := bls.PublicKeyFromBytes(proposerPubKey[:])
+	sigRoot, err := signing.ComputeSigningRoot(blobSigning, domain)
+	if err != nil {
 		return pubsub.ValidationReject, err
 	}
-	return pubsub.ValidationAccept, nil
+
+	set := &bls.SignatureBatch{
+		Messages:   [][32]byte{sigRoot},
+		PublicKeys: []bls.PublicKey{pKey},
+		Signatures: [][]byte{m.Signature},
+	}
+	return s.validateWithBatchVerifier(ctx, "blobs sidecar signature", set)
 }
 
-func validateBlobFr(blobs []*ethpb.Blob) error {
+func validateBlobFr(blobs []*enginev1.Blob) error {
 	for _, blob := range blobs {
 		for _, b := range blob.Blob {
 			if len(b) != 32 {

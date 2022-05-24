@@ -137,7 +137,7 @@ func CalculateStateRoot(
 	if err != nil {
 		return [32]byte{}, errors.Wrap(err, "could not process block")
 	}
-	if signed.Version() == version.Altair || signed.Version() == version.Bellatrix || state.Version() == version.EIP4844 {
+	if signed.Version() == version.Altair || signed.Version() == version.Bellatrix || state.Version() == version.Eip4844 {
 		sa, err := signed.Block().Body().SyncAggregate()
 		if err != nil {
 			return [32]byte{}, err

@@ -700,7 +700,6 @@ func unmarshalBlock(_ context.Context, enc []byte) (interfaces.SignedBeaconBlock
 		if err != nil {
 			return nil, err
 		}
-		return wrapper.WrappedEip4844SignedBeaconBlock(rawBlock)
 	case hasAltairKey(enc):
 		// Marshal block bytes to altair beacon block.
 		rawBlock = &ethpb.SignedBeaconBlockAltair{}
