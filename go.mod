@@ -276,9 +276,11 @@ require (
 	k8s.io/utils v0.0.0-20200520001619-278ece378a50 // indirect
 )
 
-require github.com/prysmaticlabs/eth2-types v0.0.0-20210712152240-10d33f6e0661
-
-require github.com/protolambda/ztyp v0.2.1 // indirect
+require (
+	github.com/btcsuite/btcd/btcec/v2 v2.1.2 // indirect
+	github.com/decred/dcrd/dcrec/secp256k1/v4 v4.0.1 // indirect
+	github.com/protolambda/ztyp v0.2.1 // indirect
+)
 
 replace github.com/json-iterator/go => github.com/prestonvanloon/go v1.1.7-0.20190722034630-4f2e55fcf87b
 
@@ -287,5 +289,4 @@ replace github.com/grpc-ecosystem/grpc-gateway/v2 => github.com/prysmaticlabs/gr
 
 replace github.com/ferranbt/fastssz => github.com/prysmaticlabs/fastssz v0.0.0-20220110145812-fafb696cae88
 
-// replace github.com/ethereum/go-ethereum => github.com/protolambda/go-ethereum v1.7.3
-replace github.com/ethereum/go-ethereum => github.com/protolambda/go-ethereum v1.7.4-0.20220322192006-d6fb21061346
+replace github.com/ethereum/go-ethereum => github.com/inphi/go-ethereum v1.10.8-0.20220518223817-351c4527d9df
