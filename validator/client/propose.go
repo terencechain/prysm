@@ -122,6 +122,18 @@ func (v *validator) ProposeBlock(ctx context.Context, slot types.Slot, pubKey [f
 		return
 	}
 
+	var signedSidecar *ethpb.SignedBlobsSidecar
+	if b.Sidecar != nil {
+		sig, _, err := v.signBlob(ctx, pubKey, epoch, slot, b.Sidecar)
+		if err != nil {
+			log.WithError(err).Error("Failed to sign sidecar")
+			if v.emitAccountMetrics {
+				ValidatorProposeFailVec.WithLabelValues(fmtKey).Inc()
+			}
+		}
+		signedSidecar = &ethpb.SignedBlobsSidecar{Message: b.Sidecar, Signature: sig}
+	}
+
 	// Propose and broadcast block via beacon node
 	proposal, err := blk.PbGenericBlock()
 	if err != nil {
@@ -131,6 +143,9 @@ func (v *validator) ProposeBlock(ctx context.Context, slot types.Slot, pubKey [f
 		}
 		return
 	}
+	// Propose and broadcast blobs sidecar as well if applicable
+	proposal.Sidecar = signedSidecar
+
 	blkResp, err := v.validatorClient.ProposeBeaconBlock(ctx, proposal)
 	if err != nil {
 		log.WithError(err).Error("Failed to propose block")

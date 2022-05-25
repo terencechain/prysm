@@ -50,6 +50,9 @@ func (s *Service) registerRPCHandlers() {
 			s.pingHandler,
 		)
 		s.registerRPCHandlersAltair()
+		if currEpoch >= params.BeaconConfig().Eip4844ForkEpoch {
+			s.registerRPCHandlersEIP4844()
+		}
 		return
 	}
 	s.registerRPC(
@@ -91,6 +94,14 @@ func (s *Service) registerRPCHandlersAltair() {
 	s.registerRPC(
 		p2p.RPCMetaDataTopicV2,
 		s.metaDataHandler,
+	)
+}
+
+// registerRPCHandlers for EIP-4844
+func (s *Service) registerRPCHandlersEIP4844() {
+	s.registerRPC(
+		p2p.RPCBlobsSidecarsTopicV1,
+		s.blobsSidecarsByRangeRPCHandler,
 	)
 }
 

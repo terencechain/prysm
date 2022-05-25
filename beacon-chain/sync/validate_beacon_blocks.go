@@ -8,6 +8,7 @@ import (
 	"github.com/libp2p/go-libp2p-core/peer"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"github.com/pkg/errors"
+	"github.com/protolambda/go-kzg/bls"
 	"github.com/prysmaticlabs/prysm/beacon-chain/core/blocks"
 	"github.com/prysmaticlabs/prysm/beacon-chain/core/feed"
 	blockfeed "github.com/prysmaticlabs/prysm/beacon-chain/core/feed/block"
@@ -16,6 +17,7 @@ import (
 	"github.com/prysmaticlabs/prysm/beacon-chain/state"
 	"github.com/prysmaticlabs/prysm/config/features"
 	"github.com/prysmaticlabs/prysm/config/params"
+	"github.com/prysmaticlabs/prysm/consensus-types/forks/eip4844"
 	"github.com/prysmaticlabs/prysm/consensus-types/interfaces"
 	types "github.com/prysmaticlabs/prysm/consensus-types/primitives"
 	"github.com/prysmaticlabs/prysm/consensus-types/wrapper"
@@ -253,6 +255,11 @@ func (s *Service) validateBeaconBlock(ctx context.Context, blk interfaces.Signed
 		s.setBadBlock(ctx, blockRoot)
 		return err
 	}
+
+	if err = s.validateEip4844BeaconBlock(ctx, parentState, blk.Block()); err != nil {
+		s.setBadBlock(ctx, blockRoot)
+		return err
+	}
 	return nil
 }
 
@@ -269,7 +276,7 @@ func (s *Service) validateBeaconBlock(ctx context.Context, blk interfaces.Signed
 //         [IGNORE] The block's parent (defined by block.parent_root) passes all validation (including execution
 //          node verification of the block.body.execution_payload).
 func (s *Service) validateBellatrixBeaconBlock(ctx context.Context, parentState state.BeaconState, blk interfaces.BeaconBlock) error {
-	// Error if block and state are not the same version
+	// Error if block and state are not the same version (unless we've transitioned to a new fork version)
 	if parentState.Version() != blk.Version() && blk.Version() != version.Eip4844 {
 		return errors.New("block and state are not the same version")
 	}
@@ -307,6 +314,44 @@ func (s *Service) validateBellatrixBeaconBlock(ctx context.Context, parentState 
 		return ErrOptimisticParent
 	}
 	return nil
+}
+
+// validateEip4844BeaconBlock validates the block for the EIP4844 fork.
+// spec code:
+//   [REJECT] The KZG commitments of the blobs are all correctly encoded compressed BLS G1 Points.
+//   i.e. `all(bls.KeyValidate(commitment) for commitment in block.body.blob_kzgs)`
+//   [REJECT] The KZG commitments correspond to the versioned hashes in the transactions list.
+//   i.e. `verify_kzgs_against_transactions(block.body.execution_payload.transactions, block.body.blob_kzgs)`
+func (s *Service) validateEip4844BeaconBlock(ctx context.Context, parentState state.BeaconState, blk interfaces.BeaconBlock) error {
+	// Error if block and state are not the same version
+	if parentState.Version() != blk.Version() {
+		return errors.New("block and state are not the same version")
+	}
+
+	body := blk.Body()
+	payload, err := body.ExecutionPayload()
+	if err != nil {
+		return err
+	}
+	if payload == nil {
+		return errors.New("execution payload is nil")
+	}
+
+	blobKzgs, err := body.BlobKzgs()
+	if err != nil {
+		return err
+	}
+	blobKzgsInput := make([][48]byte, len(blobKzgs))
+	for i := range blobKzgs {
+		if len(blobKzgs[i]) != 48 {
+			return errors.New("invalid kzg encoding")
+		}
+		if _, err := bls.FromCompressedG1(blobKzgs[i]); err != nil {
+			return errors.Wrap(err, "invalid commitment")
+		}
+		blobKzgsInput[i] = bytesutil.ToBytes48(blobKzgs[i])
+	}
+	return eip4844.VerifyKzgsAgainstTxs(payload.Transactions, blobKzgsInput)
 }
 
 // Returns true if the block is not the first block proposed for the proposer for the slot.

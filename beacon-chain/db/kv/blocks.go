@@ -694,6 +694,12 @@ func unmarshalBlock(_ context.Context, enc []byte) (interfaces.SignedBeaconBlock
 	}
 	var rawBlock ssz.Unmarshaler
 	switch {
+	case hasEip4844Key(enc):
+		rawBlock := &ethpb.SignedBeaconBlockWithBlobKZGs{}
+		err := rawBlock.UnmarshalSSZ(enc[len(eip4844Key):])
+		if err != nil {
+			return nil, err
+		}
 	case hasAltairKey(enc):
 		// Marshal block bytes to altair beacon block.
 		rawBlock = &ethpb.SignedBeaconBlockAltair{}

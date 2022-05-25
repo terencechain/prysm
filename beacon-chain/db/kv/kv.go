@@ -167,6 +167,7 @@ func NewKVStore(ctx context.Context, dirPath string, config *Config) (*Store, er
 			tx,
 			attestationsBucket,
 			blocksBucket,
+			blobsBucket,
 			stateBucket,
 			proposerSlashingsBucket,
 			attesterSlashingsBucket,

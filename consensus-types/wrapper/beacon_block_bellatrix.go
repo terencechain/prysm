@@ -93,6 +93,11 @@ func (w bellatrixSignedBeaconBlock) PbBellatrixBlock() (*eth.SignedBeaconBlockBe
 	return w.b, nil
 }
 
+// PbEip4844Block is a stub.
+func (bellatrixSignedBeaconBlock) PbEip4844Block() (*eth.SignedBeaconBlockWithBlobKZGs, error) {
+	return nil, ErrUnsupportedPhase0Block
+}
+
 // PbBlindedBellatrixBlock is a stub.
 func (bellatrixSignedBeaconBlock) PbBlindedBellatrixBlock() (*eth.SignedBlindedBeaconBlockBellatrix, error) {
 	return nil, ErrUnsupportedBlindedBellatrixBlock
@@ -106,11 +111,6 @@ func (bellatrixSignedBeaconBlock) PbPhase0Block() (*eth.SignedBeaconBlock, error
 // PbAltairBlock returns the underlying protobuf object.
 func (bellatrixSignedBeaconBlock) PbAltairBlock() (*eth.SignedBeaconBlockAltair, error) {
 	return nil, ErrUnsupportedAltairBlock
-}
-
-// PbEip4844Block is a stub.
-func (bellatrixSignedBeaconBlock) PbEip4844Block() (*eth.SignedBeaconBlockWithBlobKZGs, error) {
-	return nil, ErrUnsupportedEip4844Block
 }
 
 // Version of the underlying protobuf object.

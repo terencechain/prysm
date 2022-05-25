@@ -92,7 +92,7 @@ func WrappedBeaconBlock(i interface{}) (interfaces.BeaconBlock, error) {
 	case *eth.BeaconBlockWithBlobKZGs:
 		return wrappedEip4844BeaconBlock(b)
 	case *eth.GenericBeaconBlock_Eip4844:
-		return wrappedEip4844BeaconBlock(b.Eip4844.Block)
+		return wrappedEip4844BeaconBlock(b.Eip4844)
 	case nil:
 		return nil, ErrNilObjectWrapped
 	default:
