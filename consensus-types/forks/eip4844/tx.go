@@ -10,8 +10,10 @@ import (
 var errInvalidBlobTxType = errors.New("invalid blob tx type")
 var errInvalidVersionHashesVsKzg = errors.New("invalid version hashes vs kzg")
 
+const blobTxType = 5
+
 func TxPeekBlobVersionedHashes(tx []byte) ([][32]byte, error) {
-	if tx[0] != 5 {
+	if tx[0] != blobTxType {
 		return nil, errInvalidBlobTxType
 	}
 	offset := 1 + binary.BigEndian.Uint32(tx[1:5])
@@ -28,12 +30,15 @@ func TxPeekBlobVersionedHashes(tx []byte) ([][32]byte, error) {
 func VerifyKzgsAgainstTxs(txs [][]byte, blogKzgs [][48]byte) error {
 	versionedHashes := make([][32]byte, 0)
 	for _, tx := range txs {
-		hs, err := TxPeekBlobVersionedHashes(tx)
-		if err != nil {
-			return err
+		if tx[0] == blobTxType {
+			hs, err := TxPeekBlobVersionedHashes(tx)
+			if err != nil {
+				return err
+			}
+			versionedHashes = append(versionedHashes, hs...)
 		}
-		versionedHashes = append(versionedHashes, hs...)
 	}
+	// TODO(inphi): modify validation spec to handle when len(blob_txs) > len(blobKzgs)
 	for i, kzg := range blogKzgs {
 		h := types.KZGCommitment(kzg).ComputeVersionedHash()
 		if h != versionedHashes[i] {
