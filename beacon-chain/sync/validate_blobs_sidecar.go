@@ -43,6 +43,8 @@ func (s *Service) validateBlobsSidecar(ctx context.Context, pid peer.ID, msg *pu
 		return pubsub.ValidationIgnore, nil
 	}
 
+	// TODO(inphi): Handle received blobs when optimistic.
+
 	m, err := s.decodePubsubMessage(msg)
 	if err != nil {
 		tracing.AnnotateError(span, err)
