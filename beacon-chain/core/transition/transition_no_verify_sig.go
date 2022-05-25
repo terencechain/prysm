@@ -384,6 +384,7 @@ func ProcessBlockForStateRoot(
 
 	state, err = ProcessBlobKzgs(ctx, state, signed.Block().Body())
 	if err != nil {
+		tracing.AnnotateError(span, err)
 		return nil, errors.Wrap(err, "process_blob_kzgs failed")
 	}
 
