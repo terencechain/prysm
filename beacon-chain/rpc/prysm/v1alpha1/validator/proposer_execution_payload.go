@@ -103,7 +103,7 @@ func (vs *Server) getExecutionPayload(ctx context.Context, slot types.Slot, vIdx
 		if err != nil {
 			return nil, enginev1.PayloadIDBytes{}, err
 		}
-		parentHash = header.BlockHash
+		parentHash = header.BlockHash()
 	} else {
 		if activationEpochNotReached(slot) {
 			return emptyPayload(), enginev1.PayloadIDBytes{}, nil

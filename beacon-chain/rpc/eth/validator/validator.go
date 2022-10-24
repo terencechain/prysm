@@ -166,6 +166,7 @@ func (vs *Server) GetProposerDuties(ctx context.Context, req *ethpbv1.ProposerDu
 		pubkey48 := val.PublicKey()
 		pubkey := pubkey48[:]
 		for _, s := range ss {
+			vs.ProposerSlotIndexCache.SetProposerAndPayloadIDs(s, index, [8]byte{} /* payloadID */, [32]byte{} /* head root */)
 			duties = append(duties, &ethpbv1.ProposerDuty{
 				Pubkey:         pubkey,
 				ValidatorIndex: index,
@@ -181,6 +182,12 @@ func (vs *Server) GetProposerDuties(ctx context.Context, req *ethpbv1.ProposerDu
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "Could not get dependent root: %v", err)
 	}
+
+	slot, err := slots.EpochStart(req.Epoch)
+	if err != nil {
+		return nil, err
+	}
+	vs.ProposerSlotIndexCache.PrunePayloadIDs(slot)
 
 	return &ethpbv1.ProposerDutiesResponse{
 		DependentRoot:       root,
@@ -715,7 +722,7 @@ func (vs *Server) ProduceAttestationData(ctx context.Context, req *ethpbv1.Produ
 
 // GetAggregateAttestation aggregates all attestations matching the given attestation data root and slot, returning the aggregated result.
 func (vs *Server) GetAggregateAttestation(ctx context.Context, req *ethpbv1.AggregateAttestationRequest) (*ethpbv1.AggregateAttestationResponse, error) {
-	ctx, span := trace.StartSpan(ctx, "validator.GetAggregateAttestation")
+	_, span := trace.StartSpan(ctx, "validator.GetAggregateAttestation")
 	defer span.End()
 
 	allAtts := vs.AttestationsPool.AggregatedAttestations()

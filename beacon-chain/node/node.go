@@ -32,7 +32,6 @@ import (
 	"github.com/prysmaticlabs/prysm/v3/beacon-chain/execution"
 	"github.com/prysmaticlabs/prysm/v3/beacon-chain/forkchoice"
 	doublylinkedtree "github.com/prysmaticlabs/prysm/v3/beacon-chain/forkchoice/doubly-linked-tree"
-	"github.com/prysmaticlabs/prysm/v3/beacon-chain/forkchoice/protoarray"
 	"github.com/prysmaticlabs/prysm/v3/beacon-chain/gateway"
 	"github.com/prysmaticlabs/prysm/v3/beacon-chain/monitor"
 	"github.com/prysmaticlabs/prysm/v3/beacon-chain/node/registration"
@@ -185,12 +184,7 @@ func New(cliCtx *cli.Context, opts ...Option) (*BeaconNode, error) {
 		}
 	}
 
-	if features.Get().DisableForkchoiceDoublyLinkedTree {
-		beacon.forkChoicer = protoarray.New()
-	} else {
-		beacon.forkChoicer = doublylinkedtree.New()
-	}
-
+	beacon.forkChoicer = doublylinkedtree.New()
 	depositAddress, err := execution.DepositContractAddress()
 	if err != nil {
 		return nil, err
@@ -211,7 +205,7 @@ func New(cliCtx *cli.Context, opts ...Option) (*BeaconNode, error) {
 	}
 
 	log.Debugln("Starting State Gen")
-	if err := beacon.startStateGen(ctx, bfs); err != nil {
+	if err := beacon.startStateGen(ctx, bfs, beacon.forkChoicer); err != nil {
 		return nil, err
 	}
 
@@ -492,9 +486,9 @@ func (b *BeaconNode) startSlasherDB(cliCtx *cli.Context) error {
 	return nil
 }
 
-func (b *BeaconNode) startStateGen(ctx context.Context, bfs *backfill.Status) error {
+func (b *BeaconNode) startStateGen(ctx context.Context, bfs *backfill.Status, fc forkchoice.ForkChoicer) error {
 	opts := []stategen.StateGenOption{stategen.WithBackfillStatus(bfs)}
-	sg := stategen.New(b.db, opts...)
+	sg := stategen.New(b.db, fc, opts...)
 
 	cp, err := b.db.FinalizedCheckpoint(ctx)
 	if err != nil {
@@ -941,10 +935,7 @@ func (b *BeaconNode) registerDeterminsticGenesisService() error {
 }
 
 func (b *BeaconNode) registerValidatorMonitorService() error {
-	if cmd.ValidatorMonitorIndicesFlag.Value == nil {
-		return nil
-	}
-	cliSlice := cmd.ValidatorMonitorIndicesFlag.Value.Value()
+	cliSlice := b.cliCtx.IntSlice(cmd.ValidatorMonitorIndicesFlag.Name)
 	if cliSlice == nil {
 		return nil
 	}
