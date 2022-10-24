@@ -344,6 +344,7 @@ type SignedBlindedBeaconBlockContainerJson struct {
 	Phase0Block    *BeaconBlockJson                 `json:"phase0_block"`
 	AltairBlock    *BeaconBlockAltairJson           `json:"altair_block"`
 	BellatrixBlock *BlindedBeaconBlockBellatrixJson `json:"bellatrix_block"`
+	Eip4844Block   *BeaconBlockEip4844Json          `json:"eip4844_block"`
 	Signature      string                           `json:"signature" hex:"true"`
 }
 

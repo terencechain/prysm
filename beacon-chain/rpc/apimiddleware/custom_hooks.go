@@ -239,12 +239,12 @@ type bellatrixPublishBlindedBlockRequestJson struct {
 }
 
 type eip4844PublishBlockRequestJson struct {
-	Eip4844Block *beaconBlockEip4844Json `json:"eip4844_block"`
+	Eip4844Block *BeaconBlockEip4844Json `json:"eip4844_block"`
 	Signature    string                  `json:"signature" hex:"true"`
 }
 
 type eip4844PublishBlindedBlockRequestJson struct {
-	Eip4844Block *blindedBeaconBlockEip4844Json `json:"eip4844_block"`
+	Eip4844Block *BlindedBeaconBlockEip4844Json `json:"eip4844_block"`
 	Signature    string                         `json:"signature" hex:"true"`
 }
 
@@ -282,7 +282,7 @@ func setInitialPublishBlockPostRequest(endpoint *apimiddleware.Endpoint,
 	} else if currentEpoch < params.BeaconConfig().Eip4844ForkEpoch {
 		endpoint.PostRequest = &SignedBeaconBlockBellatrixContainerJson{}
 	} else {
-		endpoint.PostRequest = &signedBeaconBlockEip4844ContainerJson{}
+		endpoint.PostRequest = &SignedBeaconBlockEip4844ContainerJson{}
 	}
 	req.Body = io.NopCloser(bytes.NewBuffer(buf))
 	return true, nil
@@ -320,7 +320,7 @@ func preparePublishedBlock(endpoint *apimiddleware.Endpoint, _ http.ResponseWrit
 		endpoint.PostRequest = actualPostReq
 		return nil
 	}
-	if block, ok := endpoint.PostRequest.(*signedBeaconBlockEip4844ContainerJson); ok {
+	if block, ok := endpoint.PostRequest.(*SignedBeaconBlockEip4844ContainerJson); ok {
 		// Prepare post request that can be properly decoded on gRPC side.
 		actualPostReq := &eip4844PublishBlockRequestJson{
 			Eip4844Block: block.Message,
@@ -366,7 +366,7 @@ func setInitialPublishBlindedBlockPostRequest(endpoint *apimiddleware.Endpoint,
 	} else if currentEpoch < params.BeaconConfig().Eip4844ForkEpoch {
 		endpoint.PostRequest = &SignedBlindedBeaconBlockBellatrixContainerJson{}
 	} else {
-		endpoint.PostRequest = &signedBlindedBeaconBlockEip4844ContainerJson{}
+		endpoint.PostRequest = &SignedBlindedBeaconBlockEip4844ContainerJson{}
 	}
 	req.Body = ioutil.NopCloser(bytes.NewBuffer(buf))
 	return true, nil
@@ -404,7 +404,7 @@ func preparePublishedBlindedBlock(endpoint *apimiddleware.Endpoint, _ http.Respo
 		endpoint.PostRequest = actualPostReq
 		return nil
 	}
-	if block, ok := endpoint.PostRequest.(*signedBlindedBeaconBlockEip4844ContainerJson); ok {
+	if block, ok := endpoint.PostRequest.(*SignedBlindedBeaconBlockEip4844ContainerJson); ok {
 		// Prepare post request that can be properly decoded on gRPC side.
 		actualPostReq := &eip4844PublishBlindedBlockRequestJson{
 			Eip4844Block: block.Message,
@@ -473,7 +473,7 @@ type bellatrixBlockResponseJson struct {
 
 type eip4844BlockResponseJson struct {
 	Version string                                 `json:"version"`
-	Data    *signedBeaconBlockEip4844ContainerJson `json:"data"`
+	Data    *SignedBeaconBlockEip4844ContainerJson `json:"data"`
 }
 
 type bellatrixBlindedBlockResponseJson struct {
@@ -566,7 +566,7 @@ func serializeBlindedBlock(response interface{}) (apimiddleware.RunDefault, []by
 	case strings.EqualFold(respContainer.Version, strings.ToLower(ethpbv2.Version_EIP4844.String())):
 		actualRespContainer = &eip4844BlockResponseJson{
 			Version: respContainer.Version,
-			Data: &signedBeaconBlockEip4844ContainerJson{
+			Data: &SignedBeaconBlockEip4844ContainerJson{
 				Message:   respContainer.Data.Eip4844Block,
 				Signature: respContainer.Data.Signature,
 			},
@@ -599,7 +599,7 @@ type bellatrixStateResponseJson struct {
 
 type eip4844StateResponseJson struct {
 	Version string                  `json:"version"`
-	Data    *beaconStateEip4844Json `json:"data"`
+	Data    *BeaconStateEip4844Json `json:"data"`
 }
 
 func serializeV2State(response interface{}) (apimiddleware.RunDefault, []byte, apimiddleware.ErrorJson) {
@@ -663,12 +663,12 @@ type bellatrixProduceBlindedBlockResponseJson struct {
 
 type eip4844ProduceBlockResponseJson struct {
 	Version string                  `json:"version"`
-	Data    *beaconBlockEip4844Json `json:"data"`
+	Data    *BeaconBlockEip4844Json `json:"data"`
 }
 
 type eip4844ProduceBlindedBlockResponseJson struct {
 	Version string                         `json:"version"`
-	Data    *blindedBeaconBlockEip4844Json `json:"data"`
+	Data    *BlindedBeaconBlockEip4844Json `json:"data"`
 }
 
 func serializeProducedV2Block(response interface{}) (apimiddleware.RunDefault, []byte, apimiddleware.ErrorJson) {
