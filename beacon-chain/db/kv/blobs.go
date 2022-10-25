@@ -65,7 +65,7 @@ func (s *Store) SaveBlobsSidecar(ctx context.Context, blobSidecar *ethpb.BlobsSi
 		if shouldOverwrite {
 			for k, _ := c.Seek(rotatingBufferPrefix); bytes.HasPrefix(k, rotatingBufferPrefix); k, _ = c.Next() {
 				if err := bkt.Delete(k); err != nil {
-					log.Warnf("Could not delete blob with key %#x: %v", k, err)
+					log.WithError(err).Warnf("Could not delete blob with key %#x", k)
 				}
 			}
 		}
