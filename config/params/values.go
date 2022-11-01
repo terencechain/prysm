@@ -12,4 +12,5 @@ const (
 	GoerliName          = "goerli"
 	RopstenName         = "ropsten"
 	SepoliaName         = "sepolia"
+	EIP4844Name         = "eip4844"
 )

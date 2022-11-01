@@ -50,8 +50,10 @@ func TestRegularSyncBeaconBlockSubscriber_ProcessPendingBlocks1(t *testing.T) {
 			},
 			stateGen: stategen.New(db, doublylinkedtree.New()),
 		},
-		slotToPendingBlocks: gcache.New(time.Second, 2*time.Second),
-		seenPendingBlocks:   make(map[[32]byte]bool),
+		slotToPendingBlocks:   gcache.New(time.Second, 2*time.Second),
+		slotToPendingSidecars: gcache.New(time.Second, 2*time.Second),
+		seenPendingBlocks:     make(map[[32]byte]bool),
+		seenPendingSidecars:   make(map[[32]byte]bool),
 	}
 	r.initCaches()
 
@@ -122,8 +124,10 @@ func TestRegularSyncBeaconBlockSubscriber_OptimisticStatus(t *testing.T) {
 			},
 			stateGen: stategen.New(db, doublylinkedtree.New()),
 		},
-		slotToPendingBlocks: gcache.New(time.Second, 2*time.Second),
-		seenPendingBlocks:   make(map[[32]byte]bool),
+		slotToPendingBlocks:   gcache.New(time.Second, 2*time.Second),
+		slotToPendingSidecars: gcache.New(time.Second, 2*time.Second),
+		seenPendingBlocks:     make(map[[32]byte]bool),
+		seenPendingSidecars:   make(map[[32]byte]bool),
 	}
 	r.initCaches()
 
@@ -194,8 +198,10 @@ func TestRegularSyncBeaconBlockSubscriber_ExecutionEngineTimesOut(t *testing.T) 
 			},
 			stateGen: stategen.New(db, doublylinkedtree.New()),
 		},
-		slotToPendingBlocks: gcache.New(time.Second, 2*time.Second),
-		seenPendingBlocks:   make(map[[32]byte]bool),
+		slotToPendingBlocks:   gcache.New(time.Second, 2*time.Second),
+		slotToPendingSidecars: gcache.New(time.Second, 2*time.Second),
+		seenPendingBlocks:     make(map[[32]byte]bool),
+		seenPendingSidecars:   make(map[[32]byte]bool),
 	}
 	r.initCaches()
 
@@ -267,8 +273,10 @@ func TestRegularSync_InsertDuplicateBlocks(t *testing.T) {
 				},
 			},
 		},
-		slotToPendingBlocks: gcache.New(time.Second, 2*time.Second),
-		seenPendingBlocks:   make(map[[32]byte]bool),
+		slotToPendingBlocks:   gcache.New(time.Second, 2*time.Second),
+		slotToPendingSidecars: gcache.New(time.Second, 2*time.Second),
+		seenPendingBlocks:     make(map[[32]byte]bool),
+		seenPendingSidecars:   make(map[[32]byte]bool),
 	}
 	r.initCaches()
 
@@ -321,8 +329,10 @@ func TestRegularSyncBeaconBlockSubscriber_DoNotReprocessBlock(t *testing.T) {
 			},
 			stateGen: stategen.New(db, doublylinkedtree.New()),
 		},
-		slotToPendingBlocks: gcache.New(time.Second, 2*time.Second),
-		seenPendingBlocks:   make(map[[32]byte]bool),
+		slotToPendingBlocks:   gcache.New(time.Second, 2*time.Second),
+		slotToPendingSidecars: gcache.New(time.Second, 2*time.Second),
+		seenPendingBlocks:     make(map[[32]byte]bool),
+		seenPendingSidecars:   make(map[[32]byte]bool),
 	}
 	r.initCaches()
 
@@ -386,8 +396,10 @@ func TestRegularSyncBeaconBlockSubscriber_ProcessPendingBlocks_2Chains(t *testin
 			},
 			stateGen: stategen.New(db, doublylinkedtree.New()),
 		},
-		slotToPendingBlocks: gcache.New(time.Second, 2*time.Second),
-		seenPendingBlocks:   make(map[[32]byte]bool),
+		slotToPendingBlocks:   gcache.New(time.Second, 2*time.Second),
+		slotToPendingSidecars: gcache.New(time.Second, 2*time.Second),
+		seenPendingBlocks:     make(map[[32]byte]bool),
+		seenPendingSidecars:   make(map[[32]byte]bool),
 	}
 	r.initCaches()
 
@@ -485,8 +497,10 @@ func TestRegularSyncBeaconBlockSubscriber_PruneOldPendingBlocks(t *testing.T) {
 				},
 			},
 		},
-		slotToPendingBlocks: gcache.New(time.Second, 2*time.Second),
-		seenPendingBlocks:   make(map[[32]byte]bool),
+		slotToPendingBlocks:   gcache.New(time.Second, 2*time.Second),
+		slotToPendingSidecars: gcache.New(time.Second, 2*time.Second),
+		seenPendingBlocks:     make(map[[32]byte]bool),
+		seenPendingSidecars:   make(map[[32]byte]bool),
 	}
 	r.initCaches()
 
@@ -589,8 +603,10 @@ func TestService_BatchRootRequest(t *testing.T) {
 				Genesis:        time.Now(),
 			},
 		},
-		slotToPendingBlocks: gcache.New(time.Second, 2*time.Second),
-		seenPendingBlocks:   make(map[[32]byte]bool),
+		slotToPendingBlocks:   gcache.New(time.Second, 2*time.Second),
+		slotToPendingSidecars: gcache.New(time.Second, 2*time.Second),
+		seenPendingBlocks:     make(map[[32]byte]bool),
+		seenPendingSidecars:   make(map[[32]byte]bool),
 	}
 	r.initCaches()
 
@@ -706,8 +722,10 @@ func TestService_ProcessPendingBlockOnCorrectSlot(t *testing.T) {
 			chain:    &mockChain,
 			stateGen: stategen.New(db, doublylinkedtree.New()),
 		},
-		slotToPendingBlocks: gcache.New(time.Second, 2*time.Second),
-		seenPendingBlocks:   make(map[[32]byte]bool),
+		slotToPendingBlocks:   gcache.New(time.Second, 2*time.Second),
+		slotToPendingSidecars: gcache.New(time.Second, 2*time.Second),
+		seenPendingBlocks:     make(map[[32]byte]bool),
+		seenPendingSidecars:   make(map[[32]byte]bool),
 	}
 	r.initCaches()
 
@@ -784,8 +802,10 @@ func TestService_ProcessBadPendingBlocks(t *testing.T) {
 			chain:    &mockChain,
 			stateGen: stategen.New(db, doublylinkedtree.New()),
 		},
-		slotToPendingBlocks: gcache.New(time.Second, 2*time.Second),
-		seenPendingBlocks:   make(map[[32]byte]bool),
+		slotToPendingBlocks:   gcache.New(time.Second, 2*time.Second),
+		slotToPendingSidecars: gcache.New(time.Second, 2*time.Second),
+		seenPendingBlocks:     make(map[[32]byte]bool),
+		seenPendingSidecars:   make(map[[32]byte]bool),
 	}
 	r.initCaches()
 

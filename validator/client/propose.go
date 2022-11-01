@@ -121,6 +121,18 @@ func (v *validator) ProposeBlock(ctx context.Context, slot types.Slot, pubKey [f
 		return
 	}
 
+	var signedSidecar *ethpb.SignedBlobsSidecar
+	if b.Sidecar != nil {
+		sig, _, err := v.signBlob(ctx, pubKey, epoch, slot, b.Sidecar)
+		if err != nil {
+			log.WithError(err).Error("Failed to sign sidecar")
+			if v.emitAccountMetrics {
+				ValidatorProposeFailVec.WithLabelValues(fmtKey).Inc()
+			}
+		}
+		signedSidecar = &ethpb.SignedBlobsSidecar{Message: b.Sidecar, Signature: sig}
+	}
+
 	// Propose and broadcast block via beacon node
 	proposal, err := blk.PbGenericBlock()
 	if err != nil {
@@ -130,6 +142,9 @@ func (v *validator) ProposeBlock(ctx context.Context, slot types.Slot, pubKey [f
 		}
 		return
 	}
+	// Propose and broadcast blobs sidecar as well if applicable
+	proposal.Sidecar = signedSidecar
+
 	blkResp, err := v.validatorClient.ProposeBeaconBlock(ctx, proposal)
 	if err != nil {
 		log.WithError(err).Error("Failed to propose block")
@@ -145,7 +160,7 @@ func (v *validator) ProposeBlock(ctx context.Context, slot types.Slot, pubKey [f
 		trace.Int64Attribute("numAttestations", int64(len(blk.Block().Body().Attestations()))),
 	)
 
-	if blk.Version() == version.Bellatrix {
+	if blk.Version() == version.Bellatrix || blk.Version() == version.EIP4844 {
 		p, err := blk.Block().Body().Execution()
 		if err != nil {
 			log.WithError(err).Error("Failed to get execution payload")
@@ -154,7 +169,7 @@ func (v *validator) ProposeBlock(ctx context.Context, slot types.Slot, pubKey [f
 		log = log.WithFields(logrus.Fields{
 			"payloadHash": fmt.Sprintf("%#x", bytesutil.Trunc(p.BlockHash())),
 			"parentHash":  fmt.Sprintf("%#x", bytesutil.Trunc(p.ParentHash())),
-			"blockNumber": p.BlockNumber,
+			"blockNumber": p.BlockNumber(),
 		})
 		if !blk.IsBlinded() {
 			txs, err := p.Transactions()
@@ -374,4 +389,34 @@ func (v *validator) getGraffiti(ctx context.Context, pubKey [fieldparams.BLSPubk
 	}
 
 	return []byte{}, nil
+}
+
+// Sign block with proposer domain and private key.
+// Returns the signature, block signing root, and any error.
+func (v *validator) signBlob(ctx context.Context, pubKey [fieldparams.BLSPubkeyLength]byte,
+	epoch types.Epoch, slot types.Slot, sideCar *ethpb.BlobsSidecar) ([]byte, [32]byte, error) {
+	domain, err := v.domainData(ctx, epoch, params.BeaconConfig().DomainBlobsSidecar[:])
+	if err != nil {
+		return nil, [32]byte{}, errors.Wrap(err, domainDataErr)
+	}
+	if domain == nil {
+		return nil, [32]byte{}, errors.New(domainDataErr)
+	}
+
+	root, err := signing.ComputeSigningRoot(sideCar, domain.SignatureDomain)
+	if err != nil {
+		return nil, [32]byte{}, errors.Wrap(err, signingRootErr)
+	}
+	sig, err := v.keyManager.Sign(ctx, &validatorpb.SignRequest{
+		PublicKey:       pubKey[:],
+		SigningRoot:     root[:],
+		SignatureDomain: domain.SignatureDomain,
+		Object: &validatorpb.SignRequest_Sidecar{
+			Sidecar: sideCar,
+		},
+	})
+	if err != nil {
+		return nil, [32]byte{}, errors.Wrap(err, "could not sign block proposal")
+	}
+	return sig.Marshal(), root, nil
 }

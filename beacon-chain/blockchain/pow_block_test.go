@@ -10,7 +10,7 @@ import (
 	"github.com/holiman/uint256"
 	testDB "github.com/prysmaticlabs/prysm/v3/beacon-chain/db/testing"
 	mocks "github.com/prysmaticlabs/prysm/v3/beacon-chain/execution/testing"
-	doublylinkedtree "github.com/prysmaticlabs/prysm/v3/beacon-chain/forkchoice/doubly-linked-tree"
+	"github.com/prysmaticlabs/prysm/v3/beacon-chain/forkchoice/protoarray"
 	"github.com/prysmaticlabs/prysm/v3/beacon-chain/state/stategen"
 	"github.com/prysmaticlabs/prysm/v3/config/params"
 	"github.com/prysmaticlabs/prysm/v3/consensus-types/blocks"
@@ -109,10 +109,10 @@ func Test_validateMergeBlock(t *testing.T) {
 
 	ctx := context.Background()
 	beaconDB := testDB.SetupDB(t)
-	fcs := doublylinkedtree.New()
+	fcs := protoarray.New(nil)
 	opts := []Option{
 		WithDatabase(beaconDB),
-		WithStateGen(stategen.New(beaconDB, fcs)),
+		WithStateGen(stategen.New(beaconDB)),
 		WithForkChoiceStore(fcs),
 	}
 	service, err := NewService(ctx, opts...)
@@ -159,10 +159,10 @@ func Test_validateMergeBlock(t *testing.T) {
 func Test_getBlkParentHashAndTD(t *testing.T) {
 	ctx := context.Background()
 	beaconDB := testDB.SetupDB(t)
-	fcs := doublylinkedtree.New()
+	fcs := protoarray.New(nil)
 	opts := []Option{
 		WithDatabase(beaconDB),
-		WithStateGen(stategen.New(beaconDB, fcs)),
+		WithStateGen(stategen.New(beaconDB)),
 		WithForkChoiceStore(fcs),
 	}
 	service, err := NewService(ctx, opts...)
@@ -211,7 +211,7 @@ func Test_getBlkParentHashAndTD(t *testing.T) {
 }
 
 func Test_validateTerminalBlockHash(t *testing.T) {
-	wrapped, err := blocks.WrappedExecutionPayload(&enginev1.ExecutionPayload{})
+	wrapped, err := blocks.NewExecutionData(&enginev1.ExecutionPayload{})
 	require.NoError(t, err)
 	require.NoError(t, validateTerminalBlockHash(1, wrapped))
 
@@ -224,7 +224,7 @@ func Test_validateTerminalBlockHash(t *testing.T) {
 	params.OverrideBeaconConfig(cfg)
 	require.ErrorContains(t, "parent hash does not match terminal block hash", validateTerminalBlockHash(1, wrapped))
 
-	wrapped, err = blocks.WrappedExecutionPayload(&enginev1.ExecutionPayload{
+	wrapped, err = blocks.NewExecutionData(&enginev1.ExecutionPayload{
 		ParentHash: cfg.TerminalBlockHash.Bytes(),
 	})
 	require.NoError(t, err)

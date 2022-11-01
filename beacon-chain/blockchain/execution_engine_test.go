@@ -13,6 +13,7 @@ import (
 	"github.com/prysmaticlabs/prysm/v3/beacon-chain/execution"
 	mockExecution "github.com/prysmaticlabs/prysm/v3/beacon-chain/execution/testing"
 	doublylinkedtree "github.com/prysmaticlabs/prysm/v3/beacon-chain/forkchoice/doubly-linked-tree"
+	"github.com/prysmaticlabs/prysm/v3/beacon-chain/forkchoice/protoarray"
 	forkchoicetypes "github.com/prysmaticlabs/prysm/v3/beacon-chain/forkchoice/types"
 	bstate "github.com/prysmaticlabs/prysm/v3/beacon-chain/state"
 	"github.com/prysmaticlabs/prysm/v3/beacon-chain/state/stategen"
@@ -39,10 +40,10 @@ func Test_NotifyForkchoiceUpdate(t *testing.T) {
 	bellatrixBlk := util.SaveBlock(t, ctx, beaconDB, util.NewBeaconBlockBellatrix())
 	bellatrixBlkRoot, err := bellatrixBlk.Block().HashTreeRoot()
 	require.NoError(t, err)
-	fcs := doublylinkedtree.New()
+	fcs := doublylinkedtree.New(&mockDataAvailability{})
 	opts := []Option{
 		WithDatabase(beaconDB),
-		WithStateGen(stategen.New(beaconDB, fcs)),
+		WithStateGen(stategen.New(beaconDB)),
 		WithForkChoiceStore(fcs),
 		WithProposerIdsCache(cache.NewProposerPayloadIDsCache()),
 	}
@@ -197,6 +198,151 @@ func Test_NotifyForkchoiceUpdate(t *testing.T) {
 	}
 }
 
+//
+//
+//  A <- B <- C <- D
+//       \
+//         ---------- E <- F
+//                     \
+//                       ------ G
+// D is the current head, attestations for F and G come late, both are invalid.
+// We switch recursively to F then G and finally to D.
+//
+// We test:
+// 1. forkchoice removes blocks F and G from the forkchoice implementation
+// 2. forkchoice removes the weights of these blocks
+// 3. the blockchain package calls fcu to obtain heads G -> F -> D.
+
+func Test_NotifyForkchoiceUpdateRecursive_Protoarray(t *testing.T) {
+	ctx := context.Background()
+	beaconDB := testDB.SetupDB(t)
+
+	// Prepare blocks
+	ba := util.NewBeaconBlockBellatrix()
+	ba.Block.Body.ExecutionPayload.BlockNumber = 1
+	wba := util.SaveBlock(t, ctx, beaconDB, ba)
+	bra, err := wba.Block().HashTreeRoot()
+	require.NoError(t, err)
+
+	bb := util.NewBeaconBlockBellatrix()
+	bb.Block.Body.ExecutionPayload.BlockNumber = 2
+	wbb := util.SaveBlock(t, ctx, beaconDB, bb)
+	brb, err := wbb.Block().HashTreeRoot()
+	require.NoError(t, err)
+
+	bc := util.NewBeaconBlockBellatrix()
+	bc.Block.Body.ExecutionPayload.BlockNumber = 3
+	wbc := util.SaveBlock(t, ctx, beaconDB, bc)
+	brc, err := wbc.Block().HashTreeRoot()
+	require.NoError(t, err)
+
+	bd := util.NewBeaconBlockBellatrix()
+	pd := [32]byte{'D'}
+	bd.Block.Body.ExecutionPayload.BlockHash = pd[:]
+	bd.Block.Body.ExecutionPayload.BlockNumber = 4
+	wbd := util.SaveBlock(t, ctx, beaconDB, bd)
+	brd, err := wbd.Block().HashTreeRoot()
+	require.NoError(t, err)
+
+	be := util.NewBeaconBlockBellatrix()
+	pe := [32]byte{'E'}
+	be.Block.Body.ExecutionPayload.BlockHash = pe[:]
+	be.Block.Body.ExecutionPayload.BlockNumber = 5
+	wbe := util.SaveBlock(t, ctx, beaconDB, be)
+	bre, err := wbe.Block().HashTreeRoot()
+	require.NoError(t, err)
+
+	bf := util.NewBeaconBlockBellatrix()
+	pf := [32]byte{'F'}
+	bf.Block.Body.ExecutionPayload.BlockHash = pf[:]
+	bf.Block.Body.ExecutionPayload.BlockNumber = 6
+	bf.Block.ParentRoot = bre[:]
+	wbf := util.SaveBlock(t, ctx, beaconDB, bf)
+	brf, err := wbf.Block().HashTreeRoot()
+	require.NoError(t, err)
+
+	bg := util.NewBeaconBlockBellatrix()
+	bg.Block.Body.ExecutionPayload.BlockNumber = 7
+	pg := [32]byte{'G'}
+	bg.Block.Body.ExecutionPayload.BlockHash = pg[:]
+	bg.Block.ParentRoot = bre[:]
+	wbg := util.SaveBlock(t, ctx, beaconDB, bg)
+	brg, err := wbg.Block().HashTreeRoot()
+	require.NoError(t, err)
+
+	// Insert blocks into forkchoice
+	service := setupBeaconChain(t, beaconDB)
+	fcs := protoarray.New(&mockDataAvailability{})
+	service.cfg.ForkChoiceStore = fcs
+	service.cfg.ProposerSlotIndexCache = cache.NewProposerPayloadIDsCache()
+
+	service.justifiedBalances.balances = []uint64{50, 100, 200}
+	require.NoError(t, err)
+	ojc := &ethpb.Checkpoint{Root: params.BeaconConfig().ZeroHash[:]}
+	ofc := &ethpb.Checkpoint{Root: params.BeaconConfig().ZeroHash[:]}
+	state, blkRoot, err := prepareForkchoiceState(ctx, 1, bra, [32]byte{}, [32]byte{'A'}, ojc, ofc)
+	require.NoError(t, err)
+	require.NoError(t, fcs.InsertNode(ctx, state, blkRoot))
+	state, blkRoot, err = prepareForkchoiceState(ctx, 2, brb, bra, [32]byte{'B'}, ojc, ofc)
+	require.NoError(t, err)
+	require.NoError(t, fcs.InsertNode(ctx, state, blkRoot))
+	state, blkRoot, err = prepareForkchoiceState(ctx, 3, brc, brb, [32]byte{'C'}, ojc, ofc)
+	require.NoError(t, err)
+	require.NoError(t, fcs.InsertNode(ctx, state, blkRoot))
+	state, blkRoot, err = prepareForkchoiceState(ctx, 4, brd, brc, [32]byte{'D'}, ojc, ofc)
+	require.NoError(t, err)
+	require.NoError(t, fcs.InsertNode(ctx, state, blkRoot))
+	state, blkRoot, err = prepareForkchoiceState(ctx, 5, bre, brb, [32]byte{'E'}, ojc, ofc)
+	require.NoError(t, err)
+	require.NoError(t, fcs.InsertNode(ctx, state, blkRoot))
+	state, blkRoot, err = prepareForkchoiceState(ctx, 6, brf, bre, [32]byte{'F'}, ojc, ofc)
+	require.NoError(t, err)
+	require.NoError(t, fcs.InsertNode(ctx, state, blkRoot))
+	state, blkRoot, err = prepareForkchoiceState(ctx, 7, brg, bre, [32]byte{'G'}, ojc, ofc)
+	require.NoError(t, err)
+	require.NoError(t, fcs.InsertNode(ctx, state, blkRoot))
+
+	// Insert Attestations to D, F and G so that they have higher weight than D
+	// Ensure G is head
+	fcs.ProcessAttestation(ctx, []uint64{0}, brd, 1)
+	fcs.ProcessAttestation(ctx, []uint64{1}, brf, 1)
+	fcs.ProcessAttestation(ctx, []uint64{2}, brg, 1)
+	jc := &forkchoicetypes.Checkpoint{Epoch: 0, Root: bra}
+	require.NoError(t, fcs.UpdateJustifiedCheckpoint(jc))
+	headRoot, err := fcs.Head(ctx, []uint64{50, 100, 200})
+	require.NoError(t, err)
+	require.Equal(t, brg, headRoot)
+
+	// Prepare Engine Mock to return invalid unless head is D, LVH =  E
+	service.cfg.ExecutionEngineCaller = &mockExecution.EngineClient{ErrForkchoiceUpdated: execution.ErrInvalidPayloadStatus, ForkChoiceUpdatedResp: pe[:], OverrideValidHash: [32]byte{'D'}}
+	st, _ := util.DeterministicGenesisState(t, 1)
+	service.head = &head{
+		state: st,
+		block: wba,
+	}
+
+	require.NoError(t, beaconDB.SaveState(ctx, st, bra))
+	require.NoError(t, beaconDB.SaveGenesisBlockRoot(ctx, bra))
+	a := &notifyForkchoiceUpdateArg{
+		headState: st,
+		headBlock: wbg.Block(),
+		headRoot:  brg,
+	}
+	_, err = service.notifyForkchoiceUpdate(ctx, a)
+	require.Equal(t, true, IsInvalidBlock(err))
+	require.Equal(t, brf, InvalidBlockRoot(err))
+
+	// Ensure Head is D
+	headRoot, err = fcs.Head(ctx, service.justifiedBalances.balances)
+	require.NoError(t, err)
+	require.Equal(t, brd, headRoot)
+
+	// Ensure F and G where removed but their parent E wasn't
+	require.Equal(t, false, fcs.HasNode(brf))
+	require.Equal(t, false, fcs.HasNode(brg))
+	require.Equal(t, true, fcs.HasNode(bre))
+}
+
 func Test_NotifyForkchoiceUpdate_NIlLVH(t *testing.T) {
 	ctx := context.Background()
 	beaconDB := testDB.SetupDB(t)
@@ -233,7 +379,7 @@ func Test_NotifyForkchoiceUpdate_NIlLVH(t *testing.T) {
 
 	// Insert blocks into forkchoice
 	service := setupBeaconChain(t, beaconDB)
-	fcs := doublylinkedtree.New()
+	fcs := doublylinkedtree.New(&mockDataAvailability{})
 	service.cfg.ForkChoiceStore = fcs
 	service.cfg.ProposerSlotIndexCache = cache.NewProposerPayloadIDsCache()
 
@@ -350,7 +496,7 @@ func Test_NotifyForkchoiceUpdateRecursive_DoublyLinkedTree(t *testing.T) {
 
 	// Insert blocks into forkchoice
 	service := setupBeaconChain(t, beaconDB)
-	fcs := doublylinkedtree.New()
+	fcs := doublylinkedtree.New(&mockDataAvailability{})
 	service.cfg.ForkChoiceStore = fcs
 	service.cfg.ProposerSlotIndexCache = cache.NewProposerPayloadIDsCache()
 
@@ -428,10 +574,10 @@ func Test_NotifyNewPayload(t *testing.T) {
 
 	ctx := context.Background()
 	beaconDB := testDB.SetupDB(t)
-	fcs := doublylinkedtree.New()
+	fcs := doublylinkedtree.New(&mockDataAvailability{})
 	opts := []Option{
 		WithDatabase(beaconDB),
-		WithStateGen(stategen.New(beaconDB, fcs)),
+		WithStateGen(stategen.New(beaconDB)),
 		WithForkChoiceStore(fcs),
 	}
 	phase0State, _ := util.DeterministicGenesisState(t, 1)
@@ -674,10 +820,10 @@ func Test_NotifyNewPayload_SetOptimisticToValid(t *testing.T) {
 	params.OverrideBeaconConfig(cfg)
 	ctx := context.Background()
 	beaconDB := testDB.SetupDB(t)
-	fcs := doublylinkedtree.New()
+	fcs := doublylinkedtree.New(&mockDataAvailability{})
 	opts := []Option{
 		WithDatabase(beaconDB),
-		WithStateGen(stategen.New(beaconDB, fcs)),
+		WithStateGen(stategen.New(beaconDB)),
 		WithForkChoiceStore(fcs),
 	}
 	bellatrixState, _ := util.DeterministicGenesisStateBellatrix(t, 2)
@@ -720,7 +866,7 @@ func Test_GetPayloadAttribute(t *testing.T) {
 	beaconDB := testDB.SetupDB(t)
 	opts := []Option{
 		WithDatabase(beaconDB),
-		WithStateGen(stategen.New(beaconDB, doublylinkedtree.New())),
+		WithStateGen(stategen.New(beaconDB)),
 		WithProposerIdsCache(cache.NewProposerPayloadIDsCache()),
 	}
 
@@ -762,8 +908,8 @@ func Test_UpdateLastValidatedCheckpoint(t *testing.T) {
 
 	ctx := context.Background()
 	beaconDB := testDB.SetupDB(t)
-	fcs := doublylinkedtree.New()
-	stateGen := stategen.New(beaconDB, fcs)
+	stateGen := stategen.New(beaconDB)
+	fcs := doublylinkedtree.New(&mockDataAvailability{})
 	opts := []Option{
 		WithDatabase(beaconDB),
 		WithStateGen(stateGen),
@@ -876,11 +1022,10 @@ func Test_UpdateLastValidatedCheckpoint(t *testing.T) {
 func TestService_removeInvalidBlockAndState(t *testing.T) {
 	ctx := context.Background()
 	beaconDB := testDB.SetupDB(t)
-	fc := doublylinkedtree.New()
 	opts := []Option{
 		WithDatabase(beaconDB),
-		WithStateGen(stategen.New(beaconDB, fc)),
-		WithForkChoiceStore(fc),
+		WithStateGen(stategen.New(beaconDB)),
+		WithForkChoiceStore(doublylinkedtree.New(&mockDataAvailability{})),
 	}
 	service, err := NewService(ctx, opts...)
 	require.NoError(t, err)
@@ -929,11 +1074,10 @@ func TestService_removeInvalidBlockAndState(t *testing.T) {
 func TestService_getPayloadHash(t *testing.T) {
 	ctx := context.Background()
 	beaconDB := testDB.SetupDB(t)
-	fc := doublylinkedtree.New()
 	opts := []Option{
 		WithDatabase(beaconDB),
-		WithStateGen(stategen.New(beaconDB, fc)),
-		WithForkChoiceStore(fc),
+		WithStateGen(stategen.New(beaconDB)),
+		WithForkChoiceStore(doublylinkedtree.New(&mockDataAvailability{})),
 	}
 	service, err := NewService(ctx, opts...)
 	require.NoError(t, err)

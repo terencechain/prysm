@@ -8,6 +8,7 @@ import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/holiman/uint256"
 	"github.com/pkg/errors"
+	field_params "github.com/prysmaticlabs/prysm/v3/config/fieldparams"
 	"github.com/prysmaticlabs/prysm/v3/config/params"
 	"github.com/prysmaticlabs/prysm/v3/consensus-types/blocks"
 	"github.com/prysmaticlabs/prysm/v3/consensus-types/interfaces"
@@ -21,6 +22,7 @@ type EngineClient struct {
 	PayloadIDBytes              *pb.PayloadIDBytes
 	ForkChoiceUpdatedResp       []byte
 	ExecutionPayload            *pb.ExecutionPayload
+	ExecutionPayload4844        *pb.ExecutionPayload4844
 	ExecutionBlock              *pb.ExecutionBlock
 	Err                         error
 	ErrLatestExecBlock          error
@@ -34,6 +36,7 @@ type EngineClient struct {
 	TerminalBlockHash           []byte
 	TerminalBlockHashExists     bool
 	OverrideValidHash           [32]byte
+	BlobsBundle                 *pb.BlobsBundle
 }
 
 // NewPayload --
@@ -52,8 +55,25 @@ func (e *EngineClient) ForkchoiceUpdated(
 }
 
 // GetPayload --
-func (e *EngineClient) GetPayload(_ context.Context, _ [8]byte) (*pb.ExecutionPayload, error) {
-	return e.ExecutionPayload, e.ErrGetPayload
+func (e *EngineClient) GetPayload(_ context.Context, _ [8]byte) (interfaces.ExecutionData, error) {
+	if e.ExecutionPayload != nil && e.ExecutionPayload4844 != nil {
+		panic("ExecutionPayload and ExecutionPayload4844 are mutually exclusive")
+	}
+
+	if e.ExecutionPayload == nil && e.ExecutionPayload4844 == nil {
+		return emptyPayload(), e.ErrGetPayload
+	}
+	var payload interface{}
+	if e.ExecutionPayload != nil {
+		payload = e.ExecutionPayload
+	} else {
+		payload = e.ExecutionPayload4844
+	}
+	data, err := blocks.NewExecutionData(payload)
+	if err != nil {
+		panic(err)
+	}
+	return data, e.ErrGetPayload
 }
 
 // ExchangeTransitionConfiguration --
@@ -157,4 +177,29 @@ func (e *EngineClient) GetTerminalBlockHash(ctx context.Context, transitionTime 
 		}
 		blk = parentBlk
 	}
+}
+
+// GetBlobsBundle --
+func (e *EngineClient) GetBlobsBundle(ctx context.Context, payloadId [8]byte) (*pb.BlobsBundle, error) {
+	if e.BlobsBundle == nil {
+		return new(pb.BlobsBundle), nil
+	}
+	return e.BlobsBundle, nil
+}
+
+func emptyPayload() interfaces.ExecutionData {
+	b, err := blocks.NewExecutionData(&pb.ExecutionPayload{
+		ParentHash:    make([]byte, field_params.RootLength),
+		FeeRecipient:  make([]byte, field_params.FeeRecipientLength),
+		StateRoot:     make([]byte, field_params.RootLength),
+		ReceiptsRoot:  make([]byte, field_params.RootLength),
+		LogsBloom:     make([]byte, field_params.LogsBloomLength),
+		PrevRandao:    make([]byte, field_params.RootLength),
+		BaseFeePerGas: make([]byte, field_params.RootLength),
+		BlockHash:     make([]byte, field_params.RootLength),
+	})
+	if err != nil {
+		panic("cannot fail")
+	}
+	return b
 }

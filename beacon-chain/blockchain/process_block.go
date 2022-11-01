@@ -91,7 +91,7 @@ var initialSyncBlockCacheSize = uint64(2 * params.BeaconConfig().SlotsPerEpoch)
 //            ancestor_at_finalized_slot = get_ancestor(store, store.justified_checkpoint.root, finalized_slot)
 //            if ancestor_at_finalized_slot != store.finalized_checkpoint.root:
 //                store.justified_checkpoint = state.current_justified_checkpoint
-func (s *Service) onBlock(ctx context.Context, signed interfaces.SignedBeaconBlock, blockRoot [32]byte) error {
+func (s *Service) onBlock(ctx context.Context, signed interfaces.SignedBeaconBlock, blockRoot [32]byte, verifiedSidecar *ethpb.BlobsSidecar) error {
 	ctx, span := trace.StartSpan(ctx, "blockChain.onBlock")
 	defer span.End()
 	if err := consensusblocks.BeaconBlockIsNil(signed); err != nil {
@@ -135,7 +135,7 @@ func (s *Service) onBlock(ctx context.Context, signed interfaces.SignedBeaconBlo
 			return err
 		}
 	}
-	if err := s.savePostStateInfo(ctx, blockRoot, signed, postState); err != nil {
+	if err := s.savePostStateInfo(ctx, blockRoot, signed, verifiedSidecar, postState); err != nil {
 		return err
 	}
 
@@ -277,11 +277,11 @@ func (s *Service) onBlock(ctx context.Context, signed interfaces.SignedBeaconBlo
 	return nil
 }
 
-func getStateVersionAndPayload(st state.BeaconState) (int, interfaces.ExecutionData, error) {
+func getStateVersionAndPayload(st state.BeaconState) (int, interfaces.ExecutionDataHeader, error) {
 	if st == nil {
 		return 0, nil, errors.New("nil state")
 	}
-	var preStateHeader interfaces.ExecutionData
+	var preStateHeader interfaces.ExecutionDataHeader
 	var err error
 	preStateVersion := st.Version()
 	switch preStateVersion {
@@ -296,7 +296,7 @@ func getStateVersionAndPayload(st state.BeaconState) (int, interfaces.ExecutionD
 }
 
 func (s *Service) onBlockBatch(ctx context.Context, blks []interfaces.SignedBeaconBlock,
-	blockRoots [][32]byte) error {
+	blockRoots [][32]byte, sidecars []*ethpb.BlobsSidecar) error {
 	ctx, span := trace.StartSpan(ctx, "blockChain.onBlockBatch")
 	defer span.End()
 
@@ -339,7 +339,7 @@ func (s *Service) onBlockBatch(ctx context.Context, blks []interfaces.SignedBeac
 	}
 	type versionAndHeader struct {
 		version int
-		header  interfaces.ExecutionData
+		header  interfaces.ExecutionDataHeader
 	}
 	preVersionAndHeaders := make([]*versionAndHeader, len(blks))
 	postVersionAndHeaders := make([]*versionAndHeader, len(blks))
@@ -415,6 +415,20 @@ func (s *Service) onBlockBatch(ctx context.Context, blks []interfaces.SignedBeac
 			tracing.AnnotateError(span, err)
 			return err
 		}
+
+		var sidecar *ethpb.BlobsSidecar
+		for _, sc := range sidecars {
+			if sc.BeaconBlockSlot == b.Block().Slot() {
+				sidecar = sc
+				break
+			}
+		}
+		if sidecar != nil {
+			if err := s.cfg.BeaconDB.SaveBlobsSidecar(ctx, sidecar); err != nil {
+				return err
+			}
+		}
+
 		if i > 0 && jCheckpoints[i].Epoch > jCheckpoints[i-1].Epoch {
 			if err := s.cfg.BeaconDB.SaveJustifiedCheckpoint(ctx, jCheckpoints[i]); err != nil {
 				tracing.AnnotateError(span, err)
@@ -567,9 +581,14 @@ func (s *Service) InsertSlashingsToForkChoiceStore(ctx context.Context, slashing
 
 // This saves post state info to DB or cache. This also saves post state info to fork choice store.
 // Post state info consists of processed block and state. Do not call this method unless the block and state are verified.
-func (s *Service) savePostStateInfo(ctx context.Context, r [32]byte, b interfaces.SignedBeaconBlock, st state.BeaconState) error {
+func (s *Service) savePostStateInfo(ctx context.Context, r [32]byte, b interfaces.SignedBeaconBlock, sc *ethpb.BlobsSidecar, st state.BeaconState) error {
 	ctx, span := trace.StartSpan(ctx, "blockChain.savePostStateInfo")
 	defer span.End()
+	if sc != nil {
+		if err := s.cfg.BeaconDB.SaveBlobsSidecar(ctx, sc); err != nil {
+			return errors.Wrapf(err, "could not save sidecar from slot %d", b.Block().Slot())
+		}
+	}
 	if err := s.cfg.BeaconDB.SaveBlock(ctx, b); err != nil {
 		return errors.Wrapf(err, "could not save block from slot %d", b.Block().Slot())
 	}
@@ -606,7 +625,7 @@ func (s *Service) pruneCanonicalAttsFromPool(ctx context.Context, r [32]byte, b 
 }
 
 // validateMergeTransitionBlock validates the merge transition block.
-func (s *Service) validateMergeTransitionBlock(ctx context.Context, stateVersion int, stateHeader interfaces.ExecutionData, blk interfaces.SignedBeaconBlock) error {
+func (s *Service) validateMergeTransitionBlock(ctx context.Context, stateVersion int, stateHeader interfaces.ExecutionDataHeader, blk interfaces.SignedBeaconBlock) error {
 	// Skip validation if block is older than Bellatrix.
 	if blocks.IsPreBellatrixVersion(blk.Block().Version()) {
 		return nil

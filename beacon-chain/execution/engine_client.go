@@ -30,12 +30,18 @@ const (
 	ForkchoiceUpdatedMethod = "engine_forkchoiceUpdatedV1"
 	// GetPayloadMethod v1 request string for JSON-RPC.
 	GetPayloadMethod = "engine_getPayloadV1"
+	// GetBlobsBundleMethod v1 request string for JSON-RPC.
+	GetBlobsBundleMethod = "engine_getBlobsBundleV1"
 	// ExchangeTransitionConfigurationMethod v1 request string for JSON-RPC.
 	ExchangeTransitionConfigurationMethod = "engine_exchangeTransitionConfigurationV1"
 	// ExecutionBlockByHashMethod request string for JSON-RPC.
 	ExecutionBlockByHashMethod = "eth_getBlockByHash"
 	// ExecutionBlockByNumberMethod request string for JSON-RPC.
 	ExecutionBlockByNumberMethod = "eth_getBlockByNumber"
+	// BlobsBundleMethod request string for JSON-RPC.
+	BlobsBundleMethod = "getBlobsBundleV1"
+	// Defines the seconds to wait before timing out engine endpoints with block execution semantics (newPayload, forkchoiceUpdated).
+	payloadAndForkchoiceUpdatedTimeout = 8 * time.Second
 	// Defines the seconds before timing out engine endpoints with non-block execution semantics.
 	defaultEngineTimeout = time.Second
 )
@@ -66,12 +72,13 @@ type EngineCaller interface {
 	ForkchoiceUpdated(
 		ctx context.Context, state *pb.ForkchoiceState, attrs *pb.PayloadAttributes,
 	) (*pb.PayloadIDBytes, []byte, error)
-	GetPayload(ctx context.Context, payloadId [8]byte) (*pb.ExecutionPayload, error)
+	GetPayload(ctx context.Context, payloadId [8]byte) (interfaces.ExecutionData, error)
 	ExchangeTransitionConfiguration(
 		ctx context.Context, cfg *pb.TransitionConfiguration,
 	) error
 	ExecutionBlockByHash(ctx context.Context, hash common.Hash, withTxs bool) (*pb.ExecutionBlock, error)
 	GetTerminalBlockHash(ctx context.Context, transitionTime uint64) ([]byte, bool, error)
+	GetBlobsBundle(ctx context.Context, payloadId [8]byte) (*pb.BlobsBundle, error)
 }
 
 // NewPayload calls the engine_newPayloadV1 method via JSON-RPC.
@@ -87,11 +94,12 @@ func (s *Service) NewPayload(ctx context.Context, payload interfaces.ExecutionDa
 	ctx, cancel := context.WithDeadline(ctx, d)
 	defer cancel()
 	result := &pb.PayloadStatus{}
-	payloadPb, ok := payload.Proto().(*pb.ExecutionPayload)
-	if !ok {
-		return nil, errors.New("execution data must be an execution payload")
+
+	proto, err := payload.Proto()
+	if err != nil {
+		return nil, err
 	}
-	err := s.rpcClient.CallContext(ctx, result, NewPayloadMethod, payloadPb)
+	err = s.rpcClient.CallContext(ctx, result, NewPayloadMethod, proto)
 	if err != nil {
 		return nil, handleRPCError(err)
 	}
@@ -147,7 +155,7 @@ func (s *Service) ForkchoiceUpdated(
 }
 
 // GetPayload calls the engine_getPayloadV1 method via JSON-RPC.
-func (s *Service) GetPayload(ctx context.Context, payloadId [8]byte) (*pb.ExecutionPayload, error) {
+func (s *Service) GetPayload(ctx context.Context, payloadId [8]byte) (interfaces.ExecutionData, error) {
 	ctx, span := trace.StartSpan(ctx, "powchain.engine-api-client.GetPayload")
 	defer span.End()
 	start := time.Now()
@@ -158,9 +166,25 @@ func (s *Service) GetPayload(ctx context.Context, payloadId [8]byte) (*pb.Execut
 	d := time.Now().Add(defaultEngineTimeout)
 	ctx, cancel := context.WithDeadline(ctx, d)
 	defer cancel()
-	result := &pb.ExecutionPayload{}
-	err := s.rpcClient.CallContext(ctx, result, GetPayloadMethod, pb.PayloadIDBytes(payloadId))
-	return result, handleRPCError(err)
+	payload := &pb.ExecutionPayloadJSON{}
+	err := s.rpcClient.CallContext(ctx, payload, GetPayloadMethod, pb.PayloadIDBytes(payloadId))
+
+	if err != nil {
+		return nil, err
+	}
+
+	// EIP-4844 NOTE: Backwards compatibility for pre-4844 EVMs.
+	// We may need to revisit this once we've finalized the 4844 upgrade procedure.
+	var data interface{}
+	if payload.ExcessDataGas == nil {
+		data, err = payload.Pre4844()
+	} else {
+		data, err = payload.Post4844()
+	}
+	if err != nil {
+		return nil, err
+	}
+	return blocks.NewExecutionData(data)
 }
 
 // ExchangeTransitionConfiguration calls the engine_exchangeTransitionConfigurationV1 method via JSON-RPC.
@@ -314,6 +338,19 @@ func (s *Service) ExecutionBlockByHash(ctx context.Context, hash common.Hash, wi
 	defer span.End()
 	result := &pb.ExecutionBlock{}
 	err := s.rpcClient.CallContext(ctx, result, ExecutionBlockByHashMethod, hash, withTxs)
+	return result, handleRPCError(err)
+}
+
+// GetBlobsBundle calls the engine_getBlobsV1 method via JSON-RPC.
+func (s *Service) GetBlobsBundle(ctx context.Context, payloadId [8]byte) (*pb.BlobsBundle, error) {
+	ctx, span := trace.StartSpan(ctx, "powchain.engine-api-client.GetBlobsBundle")
+	defer span.End()
+
+	d := time.Now().Add(defaultEngineTimeout)
+	ctx, cancel := context.WithDeadline(ctx, d)
+	defer cancel()
+	result := &pb.BlobsBundle{}
+	err := s.rpcClient.CallContext(ctx, result, GetBlobsBundleMethod, pb.PayloadIDBytes(payloadId))
 	return result, handleRPCError(err)
 }
 
@@ -496,6 +533,8 @@ func fullPayloadFromExecutionBlock(
 		}
 		txs[i] = txBin
 	}
+
+	// TODO(EIP-4844): The type of payload changes here
 	return &pb.ExecutionPayload{
 		ParentHash:    header.ParentHash(),
 		FeeRecipient:  header.FeeRecipient(),

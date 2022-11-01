@@ -6,17 +6,17 @@ import (
 	"testing"
 
 	testDB "github.com/prysmaticlabs/prysm/v3/beacon-chain/db/testing"
-	doublylinkedtree "github.com/prysmaticlabs/prysm/v3/beacon-chain/forkchoice/doubly-linked-tree"
+	"github.com/prysmaticlabs/prysm/v3/beacon-chain/forkchoice/protoarray"
 	"github.com/prysmaticlabs/prysm/v3/beacon-chain/state"
 	"github.com/prysmaticlabs/prysm/v3/beacon-chain/state/stategen"
 )
 
 func testServiceOptsWithDB(t *testing.T) []Option {
 	beaconDB := testDB.SetupDB(t)
-	fcs := doublylinkedtree.New()
+	fcs := protoarray.New(&mockDataAvailability{})
 	return []Option{
 		WithDatabase(beaconDB),
-		WithStateGen(stategen.New(beaconDB, fcs)),
+		WithStateGen(stategen.New(beaconDB)),
 		WithForkChoiceStore(fcs),
 	}
 }
@@ -48,3 +48,9 @@ func satisfactoryStateBalanceCache() *stateBalanceCache {
 	err := errors.New("satisfactoryStateBalanceCache doesn't perform real caching")
 	return &stateBalanceCache{stateGen: mockStateByRooter{err: err}}
 }
+
+type mockDataAvailability struct {
+	err error
+}
+
+func (m *mockDataAvailability) IsDataAvailable(context.Context, [32]byte) error { return m.err }

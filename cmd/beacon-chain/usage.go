@@ -114,6 +114,8 @@ var appHelpFlagGroups = []flagGroup{
 			flags.SlotsPerArchivedPoint,
 			flags.BlockBatchLimit,
 			flags.BlockBatchLimitBurstFactor,
+			flags.BlobsTransferRate,
+			flags.BlobsTransferRateThresh,
 			flags.EnableDebugRPCEndpoints,
 			flags.SubscribeToAllSubnets,
 			flags.HistoricalSlasherNode,

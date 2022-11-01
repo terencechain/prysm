@@ -9,6 +9,8 @@ package kv
 var (
 	attestationsBucket      = []byte("attestations")
 	blocksBucket            = []byte("blocks")
+	blobsBucket             = []byte("blobs")
+	blobsAgesBucket         = []byte("blobs-ages")
 	stateBucket             = []byte("state")
 	stateSummaryBucket      = []byte("state-summary")
 	proposerSlashingsBucket = []byte("proposer-slashings")
@@ -53,6 +55,7 @@ var (
 	bellatrixKey      = []byte("merge")
 	bellatrixBlindKey = []byte("blind-bellatrix")
 	capellaKey        = []byte("capella")
+	eip4844Key        = []byte("eip4844")
 	// block root included in the beacon state used by weak subjectivity initial sync
 	originCheckpointBlockRootKey = []byte("origin-checkpoint-block-root")
 	// block root tracking the progress of backfill, or pointing at genesis if backfill has not been initiated

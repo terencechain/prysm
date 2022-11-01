@@ -12,8 +12,10 @@ import (
 	v "github.com/prysmaticlabs/prysm/v3/beacon-chain/core/validators"
 	"github.com/prysmaticlabs/prysm/v3/beacon-chain/state"
 	"github.com/prysmaticlabs/prysm/v3/consensus-types/blocks"
+	"github.com/prysmaticlabs/prysm/v3/consensus-types/forks/eip4844"
 	"github.com/prysmaticlabs/prysm/v3/consensus-types/interfaces"
 	"github.com/prysmaticlabs/prysm/v3/crypto/bls"
+	"github.com/prysmaticlabs/prysm/v3/encoding/bytesutil"
 	"github.com/prysmaticlabs/prysm/v3/monitoring/tracing"
 	"github.com/prysmaticlabs/prysm/v3/runtime/version"
 	"go.opencensus.io/trace"
@@ -167,8 +169,14 @@ func ProcessBlockNoVerifyAnySig(
 		return nil, nil, err
 	}
 
-	if st.Version() != signed.Block().Version() {
-		return nil, nil, fmt.Errorf("state and block are different version. %d != %d", st.Version(), signed.Block().Version())
+	sv := st.Version()
+	bv := signed.Block().Version()
+	switch {
+	case sv == bv:
+	case sv == version.Bellatrix && bv == version.EIP4844:
+		// The EIP-4844 BeaconState is the same as Bellatrix's
+	default:
+		return nil, nil, fmt.Errorf("state and block are different version. %d != %d", sv, bv)
 	}
 
 	blk := signed.Block()
@@ -243,7 +251,7 @@ func ProcessOperationsNoVerifyAttsSigs(
 		if err != nil {
 			return nil, err
 		}
-	case version.Altair, version.Bellatrix:
+	case version.Altair, version.Bellatrix, version.EIP4844:
 		state, err = altairOperations(ctx, state, signedBeaconBlock)
 		if err != nil {
 			return nil, err
@@ -252,6 +260,33 @@ func ProcessOperationsNoVerifyAttsSigs(
 		return nil, errors.New("block does not have correct version")
 	}
 
+	return state, nil
+}
+
+func ProcessBlobKzgs(ctx context.Context, state state.BeaconState, body interfaces.BeaconBlockBody) (state.BeaconState, error) {
+	_, span := trace.StartSpan(ctx, "core.state.ProocessBlobKzgs")
+	defer span.End()
+
+	payload, err := body.Execution()
+	if err != nil {
+		return nil, errors.Wrap(err, "could not get execution payload from block")
+	}
+	blobKzgs, err := body.BlobKzgs()
+	if err != nil {
+		return nil, errors.Wrap(err, "could not get blob kzgs from block")
+	}
+	blobKzgsInput := make([][48]byte, len(blobKzgs))
+	for i := range blobKzgs {
+		blobKzgsInput[i] = bytesutil.ToBytes48(blobKzgs[i])
+	}
+
+	txs, err := payload.Transactions()
+	if err != nil {
+		return nil, errors.Wrap(err, "could not get transactions from payload")
+	}
+	if err := eip4844.VerifyKzgsAgainstTxs(txs, blobKzgsInput); err != nil {
+		return nil, errors.Wrap(err, "could not verify kzgs against txs")
+	}
 	return state, nil
 }
 
@@ -267,6 +302,7 @@ func ProcessOperationsNoVerifyAttsSigs(
 //    process_eth1_data(state, block.body)
 //    process_operations(state, block.body)
 //    process_sync_aggregate(state, block.body.sync_aggregate)
+//    process_blob_kzgs(state, block.body) # [New in EIP-4844]
 func ProcessBlockForStateRoot(
 	ctx context.Context,
 	state state.BeaconState,
@@ -301,7 +337,12 @@ func ProcessBlockForStateRoot(
 			return nil, err
 		}
 		if blk.IsBlinded() {
-			state, err = b.ProcessPayloadHeader(state, executionData)
+			var header interfaces.ExecutionDataHeader
+			header, err = blocks.PayloadToHeader(executionData)
+			if err != nil {
+				return nil, err
+			}
+			state, err = b.ProcessPayloadHeader(state, header)
 		} else {
 			state, err = b.ProcessPayload(state, executionData)
 		}
@@ -340,6 +381,16 @@ func ProcessBlockForStateRoot(
 	state, err = altair.ProcessSyncAggregate(ctx, state, sa)
 	if err != nil {
 		return nil, errors.Wrap(err, "process_sync_aggregate failed")
+	}
+
+	if b.IsPreEIP4844Version(signed.Block().Version()) {
+		return state, nil
+	}
+
+	state, err = ProcessBlobKzgs(ctx, state, signed.Block().Body())
+	if err != nil {
+		tracing.AnnotateError(span, err)
+		return nil, errors.Wrap(err, "process_blob_kzgs failed")
 	}
 
 	return state, nil

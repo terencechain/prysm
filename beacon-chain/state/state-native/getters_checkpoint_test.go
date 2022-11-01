@@ -6,6 +6,7 @@ import (
 	"github.com/prysmaticlabs/go-bitfield"
 	"github.com/prysmaticlabs/prysm/v3/beacon-chain/state"
 	testtmpl "github.com/prysmaticlabs/prysm/v3/beacon-chain/state/testing"
+	enginev1 "github.com/prysmaticlabs/prysm/v3/proto/engine/v1"
 	ethpb "github.com/prysmaticlabs/prysm/v3/proto/prysm/v1alpha1"
 )
 
@@ -29,7 +30,7 @@ func TestBeaconState_PreviousJustifiedCheckpointNil_Bellatrix(t *testing.T) {
 	testtmpl.VerifyBeaconStatePreviousJustifiedCheckpointNil(
 		t,
 		func() (state.BeaconState, error) {
-			return InitializeFromProtoUnsafeBellatrix(&ethpb.BeaconStateBellatrix{})
+			return InitializeFromProtoUnsafeBellatrix(&ethpb.BeaconStateBellatrix{LatestExecutionPayloadHeader: &enginev1.ExecutionPayloadHeader{}})
 		})
 }
 
@@ -61,7 +62,7 @@ func TestBeaconState_PreviousJustifiedCheckpoint_Bellatrix(t *testing.T) {
 	testtmpl.VerifyBeaconStatePreviousJustifiedCheckpoint(
 		t,
 		func(cp *ethpb.Checkpoint) (state.BeaconState, error) {
-			return InitializeFromProtoUnsafeBellatrix(&ethpb.BeaconStateBellatrix{PreviousJustifiedCheckpoint: cp})
+			return InitializeFromProtoUnsafeBellatrix(&ethpb.BeaconStateBellatrix{PreviousJustifiedCheckpoint: cp, LatestExecutionPayloadHeader: &enginev1.ExecutionPayloadHeader{}})
 		})
 }
 
@@ -93,7 +94,7 @@ func TestBeaconState_CurrentJustifiedCheckpointNil_Bellatrix(t *testing.T) {
 	testtmpl.VerifyBeaconStateCurrentJustifiedCheckpointNil(
 		t,
 		func() (state.BeaconState, error) {
-			return InitializeFromProtoUnsafeBellatrix(&ethpb.BeaconStateBellatrix{})
+			return InitializeFromProtoUnsafeBellatrix(&ethpb.BeaconStateBellatrix{LatestExecutionPayloadHeader: &enginev1.ExecutionPayloadHeader{}})
 		})
 }
 
@@ -125,7 +126,7 @@ func TestBeaconState_CurrentJustifiedCheckpoint_Bellatrix(t *testing.T) {
 	testtmpl.VerifyBeaconStateCurrentJustifiedCheckpoint(
 		t,
 		func(cp *ethpb.Checkpoint) (state.BeaconState, error) {
-			return InitializeFromProtoUnsafeBellatrix(&ethpb.BeaconStateBellatrix{CurrentJustifiedCheckpoint: cp})
+			return InitializeFromProtoUnsafeBellatrix(&ethpb.BeaconStateBellatrix{CurrentJustifiedCheckpoint: cp, LatestExecutionPayloadHeader: &enginev1.ExecutionPayloadHeader{}})
 		})
 }
 
@@ -157,7 +158,7 @@ func TestBeaconState_FinalizedCheckpointNil_Bellatrix(t *testing.T) {
 	testtmpl.VerifyBeaconStateFinalizedCheckpointNil(
 		t,
 		func() (state.BeaconState, error) {
-			return InitializeFromProtoUnsafeBellatrix(&ethpb.BeaconStateBellatrix{})
+			return InitializeFromProtoUnsafeBellatrix(&ethpb.BeaconStateBellatrix{LatestExecutionPayloadHeader: &enginev1.ExecutionPayloadHeader{}})
 		})
 }
 
@@ -189,7 +190,7 @@ func TestBeaconState_FinalizedCheckpoint_Bellatrix(t *testing.T) {
 	testtmpl.VerifyBeaconStateFinalizedCheckpoint(
 		t,
 		func(cp *ethpb.Checkpoint) (state.BeaconState, error) {
-			return InitializeFromProtoUnsafeBellatrix(&ethpb.BeaconStateBellatrix{FinalizedCheckpoint: cp})
+			return InitializeFromProtoUnsafeBellatrix(&ethpb.BeaconStateBellatrix{FinalizedCheckpoint: cp, LatestExecutionPayloadHeader: &enginev1.ExecutionPayloadHeader{}})
 		})
 }
 
@@ -221,7 +222,7 @@ func TestBeaconState_JustificationBitsNil_Bellatrix(t *testing.T) {
 	testtmpl.VerifyBeaconStateJustificationBitsNil(
 		t,
 		func() (state.BeaconState, error) {
-			return InitializeFromProtoUnsafeBellatrix(&ethpb.BeaconStateBellatrix{})
+			return InitializeFromProtoUnsafeBellatrix(&ethpb.BeaconStateBellatrix{LatestExecutionPayloadHeader: &enginev1.ExecutionPayloadHeader{}})
 		})
 }
 
@@ -253,7 +254,7 @@ func TestBeaconState_JustificationBits_Bellatrix(t *testing.T) {
 	testtmpl.VerifyBeaconStateJustificationBits(
 		t,
 		func(bits bitfield.Bitvector4) (state.BeaconState, error) {
-			return InitializeFromProtoUnsafeBellatrix(&ethpb.BeaconStateBellatrix{JustificationBits: bits})
+			return InitializeFromProtoUnsafeBellatrix(&ethpb.BeaconStateBellatrix{JustificationBits: bits, LatestExecutionPayloadHeader: &enginev1.ExecutionPayloadHeader{}})
 		})
 }
 

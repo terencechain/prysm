@@ -5,6 +5,7 @@ import (
 	"context"
 
 	"github.com/pkg/errors"
+	"github.com/prysmaticlabs/prysm/v3/beacon-chain/forkchoice"
 	"github.com/prysmaticlabs/prysm/v3/config/features"
 	"github.com/prysmaticlabs/prysm/v3/config/params"
 	types "github.com/prysmaticlabs/prysm/v3/consensus-types/primitives"
@@ -33,9 +34,8 @@ func (n *Node) applyWeightChanges(ctx context.Context) error {
 	return nil
 }
 
-// updateBestDescendant updates the best descendant of this node and its
-// children. This function assumes the caller has a lock on Store.nodesLock
-func (n *Node) updateBestDescendant(ctx context.Context, justifiedEpoch, finalizedEpoch, currentEpoch types.Epoch) error {
+// updateBestDescendant updates the best descendant of this node and its children.
+func (n *Node) updateBestDescendant(ctx context.Context, justifiedEpoch, finalizedEpoch, currentEpoch types.Epoch, dataAvailability forkchoice.DataAvailability) error {
 	if ctx.Err() != nil {
 		return ctx.Err()
 	}
@@ -51,10 +51,14 @@ func (n *Node) updateBestDescendant(ctx context.Context, justifiedEpoch, finaliz
 		if child == nil {
 			return errors.Wrap(ErrNilNode, "could not update best descendant")
 		}
-		if err := child.updateBestDescendant(ctx, justifiedEpoch, finalizedEpoch, currentEpoch); err != nil {
+		if err := child.updateBestDescendant(ctx, justifiedEpoch, finalizedEpoch, currentEpoch, dataAvailability); err != nil {
 			return err
 		}
 		childLeadsToViableHead := child.leadsToViableHead(justifiedEpoch, finalizedEpoch, currentEpoch)
+		// optimization: only run DA checks if viable
+		if childLeadsToViableHead && dataAvailability.IsDataAvailable(ctx, child.root) != nil {
+			childLeadsToViableHead = false
+		}
 		if childLeadsToViableHead && !hasViableDescendant {
 			// The child leads to a viable head, but the current
 			// parent's best child doesn't.

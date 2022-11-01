@@ -20,6 +20,7 @@ import (
 	"github.com/prysmaticlabs/prysm/v3/container/slice"
 	"github.com/prysmaticlabs/prysm/v3/encoding/bytesutil"
 	eth "github.com/prysmaticlabs/prysm/v3/proto/prysm/v1alpha1"
+	ethpb "github.com/prysmaticlabs/prysm/v3/proto/prysm/v1alpha1"
 	"github.com/prysmaticlabs/prysm/v3/testing/assert"
 	"github.com/prysmaticlabs/prysm/v3/testing/require"
 	"github.com/prysmaticlabs/prysm/v3/testing/util"
@@ -259,7 +260,7 @@ func TestBlocksQueue_Loop(t *testing.T) {
 				highestExpectedSlot: tt.highestExpectedSlot,
 			})
 			assert.NoError(t, queue.start())
-			processBlock := func(block interfaces.SignedBeaconBlock) error {
+			processBlock := func(block interfaces.SignedBeaconBlock, sidecar *ethpb.BlobsSidecar) error {
 				if !beaconDB.HasBlock(ctx, block.Block().ParentRoot()) {
 					return fmt.Errorf("%w: %#x", errParentDoesNotExist, block.Block().ParentRoot())
 				}
@@ -267,13 +268,20 @@ func TestBlocksQueue_Loop(t *testing.T) {
 				if err != nil {
 					return err
 				}
-				return mc.ReceiveBlock(ctx, block, root)
+				return mc.ReceiveBlock(ctx, block, root, sidecar)
 			}
 
 			var blocks []interfaces.SignedBeaconBlock
 			for data := range queue.fetchedData {
 				for _, block := range data.blocks {
-					if err := processBlock(block); err != nil {
+					var sidecar *ethpb.BlobsSidecar
+					for _, s := range data.sidecars {
+						if s.BeaconBlockSlot == block.Block().Slot() {
+							sidecar = s
+							break
+						}
+					}
+					if err := processBlock(block, sidecar); err != nil {
 						continue
 					}
 					blocks = append(blocks, block)

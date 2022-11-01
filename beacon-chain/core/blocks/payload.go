@@ -37,7 +37,7 @@ func IsMergeTransitionComplete(st state.BeaconState) (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	isEmpty, err := blocks.IsEmptyExecutionData(h)
+	isEmpty, err := blocks.IsEmptyExecutionDataHeader(h)
 	if err != nil {
 		return false, err
 	}
@@ -90,8 +90,8 @@ func IsExecutionEnabled(st state.BeaconState, body interfaces.BeaconBlockBody) (
 
 // IsExecutionEnabledUsingHeader returns true if the execution is enabled using post processed payload header and block body.
 // This is an optimized version of IsExecutionEnabled where beacon state is not required as an argument.
-func IsExecutionEnabledUsingHeader(header interfaces.ExecutionData, body interfaces.BeaconBlockBody) (bool, error) {
-	isEmpty, err := blocks.IsEmptyExecutionData(header)
+func IsExecutionEnabledUsingHeader(header interfaces.ExecutionDataHeader, body interfaces.BeaconBlockBody) (bool, error) {
+	isEmpty, err := blocks.IsEmptyExecutionDataHeader(header)
 	if err != nil {
 		return false, err
 	}
@@ -104,6 +104,11 @@ func IsExecutionEnabledUsingHeader(header interfaces.ExecutionData, body interfa
 // IsPreBellatrixVersion returns true if input version is before bellatrix fork.
 func IsPreBellatrixVersion(v int) bool {
 	return v < version.Bellatrix
+}
+
+// IsPreEIP4844Version returns true if input version is before eip-4844 fork.
+func IsPreEIP4844Version(v int) bool {
+	return v < version.EIP4844
 }
 
 // ValidatePayloadWhenMergeCompletes validates if payload is valid versus input beacon state.
@@ -202,18 +207,14 @@ func ProcessPayload(st state.BeaconState, payload interfaces.ExecutionData) (sta
 	if err != nil {
 		return nil, err
 	}
-	wrappedHeader, err := blocks.WrappedExecutionPayloadHeader(header)
-	if err != nil {
-		return nil, err
-	}
-	if err := st.SetLatestExecutionPayloadHeader(wrappedHeader); err != nil {
+	if err := st.SetLatestExecutionPayloadHeader(header); err != nil {
 		return nil, err
 	}
 	return st, nil
 }
 
 // ValidatePayloadHeaderWhenMergeCompletes validates the payload header when the merge completes.
-func ValidatePayloadHeaderWhenMergeCompletes(st state.BeaconState, header interfaces.ExecutionData) error {
+func ValidatePayloadHeaderWhenMergeCompletes(st state.BeaconState, header interfaces.ExecutionDataHeader) error {
 	// Skip validation if the state is not merge compatible.
 	complete, err := IsMergeTransitionComplete(st)
 	if err != nil {
@@ -234,7 +235,7 @@ func ValidatePayloadHeaderWhenMergeCompletes(st state.BeaconState, header interf
 }
 
 // ValidatePayloadHeader validates the payload header.
-func ValidatePayloadHeader(st state.BeaconState, header interfaces.ExecutionData) error {
+func ValidatePayloadHeader(st state.BeaconState, header interfaces.ExecutionDataHeader) error {
 	// Validate header's random mix matches with state in current epoch
 	random, err := helpers.RandaoMix(st, time.CurrentEpoch(st))
 	if err != nil {
@@ -256,7 +257,7 @@ func ValidatePayloadHeader(st state.BeaconState, header interfaces.ExecutionData
 }
 
 // ProcessPayloadHeader processes the payload header.
-func ProcessPayloadHeader(st state.BeaconState, header interfaces.ExecutionData) (state.BeaconState, error) {
+func ProcessPayloadHeader(st state.BeaconState, header interfaces.ExecutionDataHeader) (state.BeaconState, error) {
 	if err := ValidatePayloadHeaderWhenMergeCompletes(st, header); err != nil {
 		return nil, err
 	}

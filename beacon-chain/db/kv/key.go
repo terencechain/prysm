@@ -30,3 +30,10 @@ func hasCapellaKey(enc []byte) bool {
 	}
 	return bytes.Equal(enc[:len(capellaKey)], capellaKey)
 }
+
+func hasEip4844Key(enc []byte) bool {
+	if len(eip4844Key) >= len(enc) {
+		return false
+	}
+	return bytes.Equal(enc[:len(eip4844Key)], eip4844Key)
+}

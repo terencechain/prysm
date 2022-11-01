@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/prysmaticlabs/prysm/v3/beacon-chain/forkchoice"
 	fieldparams "github.com/prysmaticlabs/prysm/v3/config/fieldparams"
 	"github.com/prysmaticlabs/prysm/v3/config/params"
 	types "github.com/prysmaticlabs/prysm/v3/consensus-types/primitives"
@@ -107,8 +108,9 @@ func (s *Store) head(ctx context.Context) ([32]byte, error) {
 func (s *Store) insert(ctx context.Context,
 	slot types.Slot,
 	root, parentRoot, payloadHash [fieldparams.RootLength]byte,
-	justifiedEpoch, finalizedEpoch types.Epoch) (*Node, error) {
-	ctx, span := trace.StartSpan(ctx, "doublyLinkedForkchoice.insert")
+	justifiedEpoch, finalizedEpoch types.Epoch,
+	dataAvailability forkchoice.DataAvailability) (*Node, error) {
+	_, span := trace.StartSpan(ctx, "doublyLinkedForkchoice.insert")
 	defer span.End()
 
 	s.nodesLock.Lock()
@@ -165,7 +167,7 @@ func (s *Store) insert(ctx context.Context,
 		jEpoch := s.justifiedCheckpoint.Epoch
 		fEpoch := s.finalizedCheckpoint.Epoch
 		s.checkpointsLock.RUnlock()
-		if err := s.treeRootNode.updateBestDescendant(ctx, jEpoch, fEpoch, slots.ToEpoch(currentSlot)); err != nil {
+		if err := s.treeRootNode.updateBestDescendant(ctx, jEpoch, fEpoch, slots.ToEpoch(currentSlot), dataAvailability); err != nil {
 			return n, err
 		}
 	}
