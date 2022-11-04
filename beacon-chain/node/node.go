@@ -14,12 +14,10 @@ import (
 	"strings"
 	"sync"
 	"syscall"
-	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/pkg/errors"
 	apigateway "github.com/prysmaticlabs/prysm/v3/api/gateway"
-	"github.com/prysmaticlabs/prysm/v3/async"
 	"github.com/prysmaticlabs/prysm/v3/async/event"
 	"github.com/prysmaticlabs/prysm/v3/beacon-chain/blockchain"
 	"github.com/prysmaticlabs/prysm/v3/beacon-chain/builder"
@@ -70,8 +68,6 @@ const testSkipPowFlag = "test-skip-pow"
 
 // 128MB max message size when enabling debug endpoints.
 const debugGrpcMaxMsgSize = 1 << 27
-
-const blobsPruneInterval = time.Minute * 15
 
 // Used as a struct to keep cli flag options for configuring services
 // for the beacon node. We keep this as a separate struct to not pollute the actual BeaconNode
@@ -439,7 +435,6 @@ func (b *BeaconNode) startDB(cliCtx *cli.Context, depositAddress string) error {
 	}
 	log.Infof("Deposit contract: %#x", addr.Bytes())
 
-	go b.pruneBlobs()
 	return nil
 }
 
@@ -975,13 +970,4 @@ func (b *BeaconNode) registerBuilderService() error {
 		return err
 	}
 	return b.services.RegisterService(svc)
-}
-
-func (b *BeaconNode) pruneBlobs() {
-	async.RunEvery(b.ctx, blobsPruneInterval, func() {
-		err := b.db.CleanupBlobs(b.ctx)
-		if err != nil {
-			log.WithError(err).Error("Unable to prune blobs sidecars in db")
-		}
-	})
 }
