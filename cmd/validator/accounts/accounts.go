@@ -1,14 +1,11 @@
 package accounts
 
 import (
-	"os"
-
 	"github.com/prysmaticlabs/prysm/v3/cmd"
 	"github.com/prysmaticlabs/prysm/v3/cmd/validator/flags"
 	"github.com/prysmaticlabs/prysm/v3/config/features"
 	"github.com/prysmaticlabs/prysm/v3/runtime/tos"
 	"github.com/sirupsen/logrus"
-	"github.com/urfave/cli/v2"
 )
 
 var log = logrus.WithField("prefix", "accounts")
@@ -150,44 +147,6 @@ var Commands = &cli.Command{
 			Action: func(cliCtx *cli.Context) error {
 				if err := accountsImport(cliCtx); err != nil {
 					log.WithError(err).Fatal("Could not import accounts")
-				}
-				return nil
-			},
-		},
-		{
-			Name:        "voluntary-exit",
-			Description: "Performs a voluntary exit on selected accounts",
-			Flags: cmd.WrapFlags([]cli.Flag{
-				flags.WalletDirFlag,
-				flags.WalletPasswordFileFlag,
-				flags.AccountPasswordFileFlag,
-				flags.VoluntaryExitPublicKeysFlag,
-				flags.BeaconRPCProviderFlag,
-				cmd.GrpcMaxCallRecvMsgSizeFlag,
-				flags.CertFlag,
-				flags.GrpcHeadersFlag,
-				flags.GrpcRetriesFlag,
-				flags.GrpcRetryDelayFlag,
-				flags.ExitAllFlag,
-				features.Mainnet,
-				features.PraterTestnet,
-				features.RopstenTestnet,
-				features.SepoliaTestnet,
-				features.EIP4844Testnet,
-				cmd.AcceptTosFlag,
-			}),
-			Before: func(cliCtx *cli.Context) error {
-				if err := cmd.LoadFlagsFromConfig(cliCtx, cliCtx.Command.Flags); err != nil {
-					return err
-				}
-				if err := tos.VerifyTosAcceptedOrPrompt(cliCtx); err != nil {
-					return err
-				}
-				return features.ConfigureValidator(cliCtx)
-			},
-			Action: func(cliCtx *cli.Context) error {
-				if err := accountsExit(cliCtx, os.Stdin); err != nil {
-					log.WithError(err).Fatal("Could not perform voluntary exit")
 				}
 				return nil
 			},
